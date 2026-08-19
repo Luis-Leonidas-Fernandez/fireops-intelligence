@@ -453,17 +453,19 @@ Open `.env` and add or update:
 ```env
 APP_NAME=FireOps Intelligence
 ENVIRONMENT=development
-DATABASE_URL=postgresql+asyncpg://postgres:YOUR_PASSWORD@localhost:5432/fireassets
+DATABASE_URL=postgresql+asyncpg://postgres:TU_PASSWORD@localhost:5432/fireassets
 SECRET_KEY=replace-this-value
 ```
 
 Replace:
 
 ```text
-YOUR_PASSWORD
+TU_PASSWORD
 ```
 
 with the real password you chose for the PostgreSQL `postgres` user.
+
+> Important: do not use `postgresql+asyncpg://TU_PASSWORD@localhost:5432/fireassets`. That puts the password where the user should be. On Windows, use `postgres:TU_PASSWORD`.
 
 Example:
 
@@ -474,7 +476,7 @@ DATABASE_URL=postgresql+asyncpg://postgres:postgres123@localhost:5432/fireassets
 Important:
 
 ```text
-Do not leave YOUR_PASSWORD literally in the file.
+Do not leave TU_PASSWORD literally in the file.
 ```
 
 Also important:
@@ -729,7 +731,7 @@ Use the real service name shown on your machine.
 Check that your `.env` uses the same password you set during PostgreSQL installation:
 
 ```env
-DATABASE_URL=postgresql+asyncpg://postgres:YOUR_PASSWORD@localhost:5432/fireassets
+DATABASE_URL=postgresql+asyncpg://postgres:TU_PASSWORD@localhost:5432/fireassets
 ```
 
 If your password contains symbols like `@`, `#`, `:`, `/`, or `%`, ask for help. Those characters may need URL encoding.

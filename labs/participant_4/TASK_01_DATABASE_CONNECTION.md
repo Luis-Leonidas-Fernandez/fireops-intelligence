@@ -1,23 +1,30 @@
-# Task 01 — Entender y verificar la conexión con PostgreSQL
+# Task 01 — Verificar la conexión existente con PostgreSQL
 
-En esta tarea vamos a revisar la conexión a base de datos que ya existe en el proyecto.
+En esta tarea vamos a comprobar que la conexión a PostgreSQL ya implementada en el proyecto funciona correctamente.
 
-No vamos a crear estos archivos desde cero. Ya están creados.
+> No tenés que crear código de conexión. Esa parte ya existe en el proyecto.
 
-## Archivos existentes
+## Objetivo
+
+Entender qué archivos participan en la conexión y verificar que tu computadora puede usarla.
+
+## Archivos que vamos a leer
 
 ```text
-app/config/__init__.py
 app/config/settings.py
-app/infrastructure/database/__init__.py
 app/infrastructure/database/base.py
 app/infrastructure/database/session.py
 app/infrastructure/database/metadata.py
 ```
 
-## Objetivo
+## Qué hace cada archivo
 
-Entender qué hace cada archivo y verificar que Python puede crear la conexión con PostgreSQL.
+| Archivo | Para qué sirve |
+|---|---|
+| `app/config/settings.py` | Lee variables desde `.env`, especialmente `DATABASE_URL` |
+| `app/infrastructure/database/base.py` | Define la clase base para los modelos de SQLAlchemy |
+| `app/infrastructure/database/session.py` | Crea el engine y las sesiones para hablar con PostgreSQL |
+| `app/infrastructure/database/metadata.py` | Reserva un lugar para centralizar metadata/imports de modelos |
 
 ## Flujo existente
 
@@ -26,153 +33,94 @@ Entender qué hace cada archivo y verificar que Python puede crear la conexión 
   ↓
 settings.py lee DATABASE_URL
   ↓
-session.py crea engine
+session.py crea el engine
   ↓
-AsyncSessionLocal crea sesiones
+session.py prepara sesiones async
   ↓
-get_database_session entrega una sesión a FastAPI
+los endpoints podrán pedir una sesión de base de datos
 ```
 
-## Rama sugerida
+## Antes de empezar
 
-```powershell
-git checkout main
-git pull
-git checkout -b participant-X/task-01-verify-database-connection
+Antes de tocar código, creá o activá tu rama siguiendo:
+
+```text
+GIT_WORKFLOW.md
 ```
 
-Reemplazá `participant-X` por tu número.
+No trabajes directo sobre `main`.
 
 ---
 
 # Paso 1 — Verificar `.env`
 
-El archivo `.env` debe tener algo como:
+El archivo `.env` debe tener una línea como esta en Windows:
 
 ```env
-APP_NAME=FireOps Intelligence
-ENVIRONMENT=development
-DATABASE_URL=postgresql+asyncpg://postgres:YOUR_PASSWORD@localhost:5432/fireassets
-SECRET_KEY=replace-this-value
+DATABASE_URL=postgresql+asyncpg://postgres:TU_PASSWORD@localhost:5432/fireassets
 ```
 
-En Windows, reemplazá `YOUR_PASSWORD` por tu contraseña real de PostgreSQL.
+Reemplazá `TU_PASSWORD` por la contraseña real del usuario `postgres`.
 
-No dejes `YOUR_PASSWORD` escrito literal.
+No dejes `TU_PASSWORD` escrito literal.
 
-En Mac puede verse distinto, por ejemplo:
+## Cómo leer esta URL
 
-```env
-DATABASE_URL=postgresql+asyncpg://luis@localhost:5432/fireassets
+```text
+postgresql       → tipo de base de datos
+asyncpg          → driver async de Python
+postgres         → usuario de PostgreSQL en Windows
+TU_PASSWORD      → contraseña real del usuario postgres
+localhost        → la base está en tu computadora
+5432             → puerto de PostgreSQL
+fireassets       → nombre de la base de datos
 ```
 
-Eso está bien si PostgreSQL local permite conectarse con ese usuario.
+> Importante: no uses `postgresql+asyncpg://TU_PASSWORD@localhost:5432/fireassets`. Eso es incorrecto porque pone la contraseña en el lugar del usuario.
 
 ---
 
-# Paso 2 — Leer `settings.py`
+# Paso 2 — Confirmar que PostgreSQL está corriendo
 
-Abrir:
+En PowerShell, ejecutar:
+
+```powershell
+Get-Service *postgres*
+```
+
+Resultado esperado:
 
 ```text
-app/config/settings.py
+Running
 ```
 
-Deberías ver una clase parecida a esta:
+Si aparece `Stopped`, pedí ayuda antes de seguir.
 
-```python
-class Settings(BaseSettings):
-    app_name: str = "FireOps Intelligence"
-    environment: str = "development"
-    database_url: str
-    secret_key: str
+---
+
+# Paso 3 — Confirmar que existe la base `fireassets`
+
+Ejecutar:
+
+```powershell
+psql -U postgres -d fireassets
 ```
 
-## Qué hace
-
-Este archivo lee variables desde `.env`.
-
-La más importante para la base de datos es:
+Si entra correctamente, deberías ver:
 
 ```text
-DATABASE_URL
+fireassets=#
 ```
 
-En Python se usa como:
+Salir con:
 
-```python
-settings.database_url
+```sql
+\q
 ```
 
 ---
 
-# Paso 3 — Leer `base.py`
-
-Abrir:
-
-```text
-app/infrastructure/database/base.py
-```
-
-Deberías ver:
-
-```python
-from sqlalchemy.ext.asyncio import AsyncAttrs
-from sqlalchemy.orm import DeclarativeBase
-
-
-class Base(AsyncAttrs, DeclarativeBase):
-    pass
-```
-
-## Qué hace
-
-`Base` es la clase madre de los modelos de base de datos.
-
-Después vamos a crear modelos así:
-
-```python
-class Asset(Base):
-    ...
-```
-
-Eso le permite a SQLAlchemy saber que `Asset` representa una tabla.
-
----
-
-# Paso 4 — Leer `session.py`
-
-Abrir:
-
-```text
-app/infrastructure/database/session.py
-```
-
-Buscá estas partes:
-
-```python
-engine = create_async_engine(...)
-```
-
-```python
-AsyncSessionLocal = async_sessionmaker(...)
-```
-
-```python
-async def get_database_session(...):
-```
-
-## Qué hace cada cosa
-
-| Pieza | Significado |
-|---|---|
-| `engine` | puente principal hacia PostgreSQL |
-| `AsyncSessionLocal` | fábrica de sesiones |
-| `get_database_session` | función que entrega una sesión a un endpoint |
-
----
-
-# Paso 5 — Verificar que Python lee `.env`
+# Paso 4 — Verificar que Python lee la configuración
 
 Desde la raíz del proyecto, con `.venv` activo, ejecutar:
 
@@ -183,14 +131,16 @@ python -c "from app.config.settings import get_settings; print(get_settings().da
 Resultado esperado:
 
 ```text
-postgresql+asyncpg://...
+postgresql+asyncpg://postgres:...
 ```
 
-Si aparece un error sobre `database_url` o `secret_key`, revisá tu `.env`.
+No hace falta que muestres tu contraseña completa en clase.
+
+Si aparece un error sobre `database_url` o `secret_key`, revisá tu archivo `.env`.
 
 ---
 
-# Paso 6 — Verificar que Python crea el engine
+# Paso 5 — Verificar que SQLAlchemy crea el engine
 
 Ejecutar:
 
@@ -204,72 +154,132 @@ Resultado esperado:
 AsyncEngine
 ```
 
-Eso confirma que SQLAlchemy pudo crear el objeto de conexión.
+Eso significa que Python pudo cargar la configuración y preparar el objeto de conexión.
 
 ---
 
-# Paso 7 — Verificar que PostgreSQL está disponible
+# Paso 6 — Verificar que el proyecto sigue importando bien
 
 Ejecutar:
 
 ```powershell
-psql -U postgres -d fireassets
+python -c "from app.main import app; print(app.title)"
 ```
 
-Si entra, deberías ver:
+Resultado esperado:
 
 ```text
-fireassets=#
+Fire Control
 ```
 
-Salir:
-
-```sql
-\q
-```
+Si esto falla, copiá el error completo y pedí ayuda.
 
 ---
 
-# Paso 8 — Revisar estado de Git
+# Paso 7 — Revisar estado de Git
+
+Ejecutar:
 
 ```powershell
 git status
 ```
 
-En esta tarea quizás no tengas que modificar código.
+En esta tarea probablemente no tengas cambios de código.
 
-Si sólo verificaste y leíste archivos, puede estar limpio.
+Si aparecen archivos como `.env`, `.venv` o `__pycache__`, no los subas.
+
+---
+
+# Uso de `print()` para aprender
+
+En esta tarea no vamos a agregar `print()` dentro del código del proyecto.
+
+Vamos a usar `print()` desde comandos cortos de Python para mirar qué está cargando la aplicación.
+
+## Ver nombre de la aplicación
+
+Ejecutar:
+
+```powershell
+python -c "from app.config.settings import get_settings; settings = get_settings(); print('App name:', settings.app_name)"
+```
+
+Resultado esperado:
+
+```text
+App name: FireOps Intelligence
+```
+
+## Ver ambiente
+
+Ejecutar:
+
+```powershell
+python -c "from app.config.settings import get_settings; settings = get_settings(); print('Environment:', settings.environment)"
+```
+
+Resultado esperado:
+
+```text
+Environment: development
+```
+
+## Ver tipo de engine
+
+Ejecutar:
+
+```powershell
+python -c "from app.infrastructure.database.session import engine; print('Engine type:', type(engine).__name__)"
+```
+
+Resultado esperado:
+
+```text
+Engine type: AsyncEngine
+```
+
+## Regla importante
+
+Estos `print()` viven sólo en la terminal.
+
+No modifican archivos del proyecto.
+
+Por eso no hace falta borrarlos antes del commit.
+
+Pero si agregaste prints manualmente en archivos `.py`, revisalos con:
+
+```powershell
+git diff
+```
+
+y borralos si eran sólo para practicar.
 
 ---
 
 # Qué entregar
 
-Entregá:
+Entregá estos resultados:
 
-1. Resultado de:
-
-```powershell
-python -c "from app.config.settings import get_settings; print(get_settings().database_url)"
-```
-
-2. Resultado de:
+1. Confirmación de que PostgreSQL está `Running`.
+2. Confirmación de que pudiste entrar a `fireassets`.
+3. Resultado de:
 
 ```powershell
 python -c "from app.infrastructure.database.session import engine; print(type(engine).__name__)"
 ```
 
-3. Confirmación de que pudiste entrar a `fireassets` con `psql`.
-
 4. Una explicación corta con tus palabras:
 
 ```text
-settings.py lee la configuración, base.py define la clase madre de los modelos y session.py prepara las sesiones para conectarse a PostgreSQL.
+La conexión ya está implementada. settings.py lee la URL de la base, session.py prepara SQLAlchemy para conectarse y los endpoints podrán usar esa sesión más adelante.
 ```
 
 ---
 
 # Qué aprendiste
 
-La conexión ya existe en el proyecto.
+La conexión a PostgreSQL ya existe.
 
-Todavía falta crear modelos, migraciones y endpoints que usen esa conexión.
+En esta tarea no escribiste la conexión: aprendiste a verificarla.
+
+La próxima tarea será crear la primera tabla real: `bienes`.

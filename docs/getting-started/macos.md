@@ -254,7 +254,7 @@ whoami
 
 If PostgreSQL was configured with a dedicated user and password, use:
 
-DATABASE_URL=postgresql+asyncpg://postgres:your_password@localhost:5432/fireassets
+DATABASE_URL=postgresql+asyncpg://postgres:TU_PASSWORD@localhost:5432/fireassets
 
 Do not commit .env to Git.
 

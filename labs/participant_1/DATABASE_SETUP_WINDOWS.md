@@ -272,6 +272,8 @@ TU_PASSWORD
 
 por la contraseña real del usuario `postgres`.
 
+> Importante: no uses `postgresql+asyncpg://TU_PASSWORD@localhost:5432/fireassets`. Eso pone la contraseña en el lugar del usuario. La forma correcta en Windows es `postgres:TU_PASSWORD`.
+
 ---
 
 # Paso 9 — Entender DATABASE_URL

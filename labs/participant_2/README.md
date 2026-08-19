@@ -34,7 +34,7 @@ El objetivo no es correr. El objetivo es entender.
 | Orden | Archivo | Objetivo |
 |---|---|---|
 | 1 | `TASK_01_DATABASE_CONNECTION.md` | Entender y verificar la conexión existente con PostgreSQL |
-| 2 | `TASK_02_CREATE_ASSET_TABLE.md` | Crear la tabla `bienes` |
+| 2 | `TASK_02_CREATE_ASSET_TABLE.md` | Crear `categorias` y `bienes` |
 | 3 | `TASK_03_REGISTER_ASSET_ENDPOINT.md` | Guardar un bien desde la API |
 | 4 | `TASK_04_TEST_REGISTER_ASSET.md` | Probar el endpoint automáticamente |
 

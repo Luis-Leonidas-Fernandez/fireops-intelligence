@@ -42,9 +42,10 @@ TASK_04_TEST_REGISTER_ASSET.md
    - `AsyncSession` existente
    - `get_database_session` existente
 
-2. **Task 02 — Crear tabla de bienes**
-   - modelo SQLAlchemy
-   - tabla `bienes`
+2. **Task 02 — Crear categorías y bienes**
+   - modelo `Category`
+   - modelo `Asset`
+   - tablas `categorias` y `bienes`
    - Alembic
    - migración
    - `alembic upgrade head`

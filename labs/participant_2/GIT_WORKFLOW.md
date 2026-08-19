@@ -651,6 +651,36 @@ También sirve para demostrar que entendiste el flujo.
 
 ---
 
+# Antes de hacer commit — revisar prints de práctica
+
+Durante la clase podés usar `print()` para entender qué está pasando.
+
+Pero antes de crear el commit, revisá si quedaron prints de práctica en el código.
+
+Ejecutá:
+
+```bash
+git diff
+```
+
+Buscá líneas como:
+
+```python
+print(...)
+```
+
+Regla:
+
+```text
+Si el print era sólo para aprender o mirar datos en consola, borralo antes del commit.
+```
+
+No subas una Pull Request llena de prints de prueba.
+
+Eso ensucia el código y hace más difícil revisar.
+
+---
+
 # Resumen rápido
 
 ```bash

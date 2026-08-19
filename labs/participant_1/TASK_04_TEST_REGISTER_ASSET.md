@@ -14,15 +14,17 @@ tests/modules/inventory/test_register_asset.py
 
 Este test llama al endpoint real.
 
-Como el endpoint guarda en PostgreSQL, la base de datos debe estar configurada y la tabla `bienes` debe existir.
+Como el endpoint guarda en PostgreSQL, la base de datos debe estar configurada y las tablas `categorias` y `bienes` deben existir.
 
-## Rama sugerida
+## Antes de empezar
 
-```powershell
-git checkout main
-git pull
-git checkout -b participant-X/task-04-test-register-asset
+Antes de tocar código, creá o activá tu rama siguiendo:
+
+```text
+GIT_WORKFLOW.md
 ```
+
+No trabajes directo sobre `main`.
 
 ---
 
@@ -49,34 +51,69 @@ Copiar:
 ```python
 from uuid import uuid4
 
-from fastapi.testclient import TestClient
+import pytest
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy import text
 
+from app.infrastructure.database.session import AsyncSessionLocal
 from app.main import app
 
-client = TestClient(app)
+
+async def get_or_create_test_category() -> int:
+    async with AsyncSessionLocal() as session:
+        await session.execute(
+            text(
+                """
+                INSERT INTO categorias (nombre)
+                VALUES ('Mangueras')
+                ON CONFLICT (nombre) DO NOTHING
+                """
+            )
+        )
+        result = await session.execute(
+            text("SELECT id FROM categorias WHERE nombre = 'Mangueras'")
+        )
+        await session.commit()
+        return int(result.scalar_one())
 
 
-def test_register_asset_creates_asset() -> None:
+@pytest.mark.asyncio
+async def test_register_asset_creates_asset() -> None:
+    category_id = await get_or_create_test_category()
     internal_code = f"BOM-{uuid4().hex[:8]}"
 
-    response = client.post(
-        "/inventory/assets",
-        json={
-            "internal_code": internal_code,
-            "name": "Manguera forestal",
-            "category_id": 1,
-        },
-    )
+    transport = ASGITransport(app=app)
+
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/inventory/assets",
+            json={
+                "internal_code": internal_code,
+                "name": "Manguera forestal",
+                "category_id": category_id,
+            },
+        )
 
     assert response.status_code == 201
 
     data = response.json()
 
+    print("Category ID used in test:", category_id)
+    print("Response JSON:", data)
+
     assert isinstance(data["id"], int)
     assert data["internal_code"] == internal_code
     assert data["name"] == "Manguera forestal"
-    assert data["category_id"] == 1
+    assert data["category_id"] == category_id
 ```
+
+## Por qué el test crea o busca una categoría
+
+El bien necesita una `categoria_id` válida.
+
+Por eso el test primero se asegura de que exista la categoría `Mangueras` y usa su `id` real.
+
+Así evitamos depender de que la categoría tenga siempre `id = 1`.
 
 ## Por qué usamos `uuid4`
 
@@ -112,6 +149,38 @@ No subas `.env`, `.venv`, `__pycache__` ni archivos temporales.
 
 ---
 
+# Uso de `print()` para aprender
+
+En el test agregamos estos `print()`:
+
+```python
+print("Category ID used in test:", category_id)
+print("Response JSON:", data)
+```
+
+Sirven para ver:
+
+- qué categoría usó el test;
+- qué respondió la API.
+
+Para ver los prints al ejecutar pytest, usá:
+
+```powershell
+python -m pytest -v -s
+```
+
+La opción `-s` permite que pytest muestre los `print()` en la consola.
+
+## Regla importante
+
+Estos `print()` son para aprender durante la clase.
+
+Antes de hacer commit y subir tu Pull Request, borralos del test si el responsable lo pide.
+
+Si quedan en el test, deben aportar información útil. Si sólo eran para mirar mientras aprendías, se eliminan.
+
+---
+
 # Qué entregar
 
 - Resultado de `python -m pytest -v`.
@@ -122,4 +191,4 @@ No subas `.env`, `.venv`, `__pycache__` ni archivos temporales.
 
 # Qué aprendiste
 
-Un test automático permite comprobar que el endpoint sigue funcionando sin probar todo manualmente desde `/docs`.
+Un test automático permite comprobar que el endpoint async sigue funcionando sin probar todo manualmente desde `/docs`.

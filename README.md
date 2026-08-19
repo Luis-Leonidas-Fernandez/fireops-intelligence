@@ -237,8 +237,14 @@ Example local configuration:
 ```env
 APP_NAME=FireOps Intelligence
 ENVIRONMENT=development
-DATABASE_URL=postgresql+asyncpg://luis@localhost:5432/fireassets
+DATABASE_URL=postgresql+asyncpg://postgres:TU_PASSWORD@localhost:5432/fireassets
 SECRET_KEY=replace-this-value
+```
+
+On macOS with a local PostgreSQL user matching your system user, the URL may look like:
+
+```env
+DATABASE_URL=postgresql+asyncpg://luis@localhost:5432/fireassets
 ```
 
 Never commit `.env`.
