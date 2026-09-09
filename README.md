@@ -60,6 +60,33 @@ As the project collects reliable operational data, future phases may include:
 
 ---
 
+## Frontend direction
+
+The backend remains a FastAPI API. The planned web interface should be developed as a separate frontend application using **React + Vite + TypeScript**.
+
+Recommended learning path:
+
+```text
+React + Vite
+  ↓ calls HTTP endpoints
+FastAPI
+  ↓ uses SQLAlchemy
+PostgreSQL
+```
+
+This keeps responsibilities clear:
+
+| Layer | Responsibility |
+|---|---|
+| React + Vite | User interface, forms, tables, filters, client-side state |
+| FastAPI | API endpoints, validation flow, application behavior |
+| SQLAlchemy | Python-to-database persistence layer |
+| PostgreSQL | Durable relational data storage |
+
+Astro may be useful later for public documentation or a landing page. Flutter may be useful later for mobile or tablet workflows. For the first internal web application, React + Vite is the clearest teaching path.
+
+---
+
 ## Architecture
 
 The project follows a combination of:
@@ -133,6 +160,7 @@ fire-control/
 | Testing | pytest, pytest-asyncio, HTTPX |
 | Linting and formatting | Ruff |
 | Static typing | mypy |
+| Planned web frontend | React + Vite + TypeScript |
 
 ---
 
@@ -410,6 +438,33 @@ Suggested testing levels:
 - FastAPI endpoint tests;
 - migration tests;
 - architecture-boundary tests.
+
+---
+
+## Learning labs
+
+Beginner-friendly class material is stored under:
+
+```text
+labs/
+```
+
+The labs are designed for four participants who are learning Git, GitHub, PostgreSQL, FastAPI, SQLAlchemy, Alembic, and testing. Each participant works in an isolated folder, creates their own branch, opens a Pull Request, and the maintainer decides which implementation is merged.
+
+Current class path:
+
+| Task | Focus |
+|---|---|
+| Task 01 | Verify the existing database configuration |
+| Task 02 | Create `categorias` and `bienes` with Alembic |
+| Task 03 | Register an asset through `POST /inventory/assets` |
+| Task 04 | Test asset registration |
+
+The endpoint flow diagram used in class is stored at:
+
+```text
+labs/assets/endpoint-data-flow-nodes.png
+```
 
 ---
 

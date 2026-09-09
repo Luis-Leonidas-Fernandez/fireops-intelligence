@@ -12,7 +12,314 @@ app/modules/inventory/register_asset/router.py
 app/main.py
 ```
 
-## Flujo
+## Mapa de archivos y orden de implementación
+
+Esta tarea se escribe en tres lugares distintos. No copies todo en un solo archivo. Cada pieza tiene una responsabilidad.
+
+| Orden | Archivo | Qué se escribe ahí | Por qué va ahí |
+|---|---|---|---|
+| 1 | `app/modules/inventory/register_asset/schemas.py` | Clases `RegisterAssetRequest` y `RegisterAssetResponse` | Define la forma de los datos que entran y salen del endpoint |
+| 2 | `app/modules/inventory/register_asset/router.py` | Función `register_asset` y router `POST /inventory/assets` | Define la ruta HTTP y la lógica mínima para guardar el bien |
+| 3 | `app/main.py` | `app.include_router(register_asset_router)` | Conecta el router nuevo con la aplicación principal |
+
+El orden importa:
+
+```text
+primero schemas.py
+  ↓
+después router.py
+  ↓
+por último main.py
+  ↓
+recién ahí probar en /docs
+```
+
+Si intentás crear el router antes de los schemas, Python no va a encontrar `RegisterAssetRequest` ni `RegisterAssetResponse`.
+Si olvidás conectar el router en `main.py`, el endpoint no va a aparecer en `/docs`.
+
+
+## Diagrama simple del flujo de datos de un endpoint
+
+Este diagrama sirve para entender cualquier endpoint que creemos en el proyecto.
+
+
+![Diagrama visual del flujo de datos de un endpoint](../assets/endpoint-data-flow-nodes.png)
+
+
+### Lectura guiada del diagrama
+
+Leé la imagen de izquierda a derecha y después bajá hacia la base de datos. Este flujo muestra qué ocurre desde que alguien envía datos hasta que PostgreSQL los guarda y la API responde.
+
+## 1. Cliente
+
+El cliente es quien llama al endpoint. Puede ser:
+
+- Swagger docs, desde `http://127.0.0.1:8000/docs`;
+- un frontend;
+- Postman o Insomnia;
+- un test automatizado.
+
+El cliente envía un JSON parecido a este:
+
+```json
+{
+  "internal_code": "BOM-001",
+  "name": "Manguera forestal",
+  "category_id": 1
+}
+```
+
+Ese JSON todavía no es confiable. Puede venir incompleto, con campos mal escritos o con valores inválidos.
+
+## 2. Schema Request y validaciones de entrada
+
+El `Schema Request` valida lo que entra antes de que la función trabaje con esos datos. En esta tarea usamos:
+
+```python
+RegisterAssetRequest
+```
+
+Este schema revisa reglas como:
+
+```python
+internal_code: str = Field(min_length=3, max_length=30)
+name: str = Field(min_length=3, max_length=150)
+category_id: int = Field(gt=0)
+```
+
+Eso significa:
+
+| Campo | Validación | Por qué importa |
+|---|---|---|
+| `internal_code` | texto entre 3 y 30 caracteres | evita códigos vacíos o demasiado largos |
+| `name` | texto entre 3 y 150 caracteres | evita nombres vacíos o absurdamente largos |
+| `category_id` | número mayor que 0 | evita IDs negativos o inválidos |
+
+Si el JSON no cumple estas reglas, FastAPI corta el flujo y responde un error `422`.
+
+Importante:
+
+```text
+Si falla la validación del Request, no se llega al router, no se crea el modelo y no se guarda nada en PostgreSQL.
+```
+
+## 3. Router y función del endpoint
+
+El `Router` define la URL y la función que se ejecuta. En esta tarea es:
+
+```python
+@router.post("")
+async def register_asset(...):
+```
+
+La función `register_asset()` es el punto donde empieza la acción real.
+
+Su responsabilidad mínima es:
+
+1. recibir un `RegisterAssetRequest` ya validado;
+2. crear un objeto `Asset`;
+3. pedirle a SQLAlchemy que lo guarde;
+4. devolver un `RegisterAssetResponse`.
+
+El router NO representa una tabla. El router representa una acción HTTP.
+
+## 4. Modelo de base de datos
+
+El modelo `Asset` representa la tabla `bienes`.
+
+Cuando hacemos:
+
+```python
+asset = Asset(
+    codigo_interno=request.internal_code,
+    nombre=request.name,
+    categoria_id=request.category_id,
+)
+```
+
+creamos un objeto Python que SQLAlchemy sabe convertir en una fila de PostgreSQL.
+
+Pero ojo:
+
+```text
+Crear Asset(...) NO guarda nada todavía.
+Sólo crea un objeto en memoria.
+```
+
+## 5. Session de SQLAlchemy
+
+La `session` es el puente entre Python y PostgreSQL.
+
+Pensala como una mesa de trabajo temporal. Primero colocamos cambios sobre esa mesa y después decidimos si los confirmamos o no.
+
+En esta tarea usamos:
+
+```python
+session.add(asset)
+await session.commit()
+await session.refresh(asset)
+```
+
+Qué hace cada línea:
+
+| Código | Qué hace | Todavía puede fallar |
+|---|---|---|
+| `session.add(asset)` | prepara el objeto para guardarlo | sí, todavía no está confirmado |
+| `await session.commit()` | confirma y guarda en PostgreSQL | sí, puede fallar por restricciones de la DB |
+| `await session.refresh(asset)` | vuelve a leer el objeto desde la DB | sí, pero normalmente se usa para obtener el `id` generado |
+
+Ejemplo importante:
+
+```text
+Asset(...) crea el objeto.
+session.add(asset) lo pone en la operación pendiente.
+commit() confirma la operación.
+refresh() trae datos generados por PostgreSQL, como el id.
+```
+
+¿Por qué no guardamos directo?
+
+Porque la session permite trabajar con transacciones. Una transacción es una operación que debe completarse entera o no completarse.
+
+Ejemplo futuro:
+
+```text
+crear bien
+crear movimiento inicial
+crear registro de auditoría
+```
+
+Si una parte falla, podemos cancelar todo para no dejar datos a medias.
+
+## 6. Validaciones de base de datos
+
+Además de las validaciones del schema, PostgreSQL también valida reglas propias de la tabla.
+
+Ejemplos:
+
+| Regla | Dónde se define | Qué evita |
+|---|---|---|
+| `nullable=False` | modelo / migración | evita guardar campos obligatorios vacíos |
+| `unique=True` | modelo / migración | evita repetir `codigo_interno` |
+| `ForeignKey("categorias.id")` | modelo / migración | evita crear bienes con una categoría inexistente |
+
+Esto es clave:
+
+```text
+El schema valida la forma de los datos antes de entrar.
+La base de datos protege la consistencia final de los datos guardados.
+```
+
+Por ejemplo, aunque `category_id = 999` sea un número válido para Pydantic, PostgreSQL puede rechazarlo si no existe una categoría con `id = 999`.
+
+## 7. PostgreSQL
+
+PostgreSQL guarda el registro en la tabla `bienes`.
+
+Si todo sale bien, genera un `id` para el nuevo bien. Ese `id` no lo inventa FastAPI. Lo genera la base de datos.
+
+Por eso después del `commit()` hacemos:
+
+```python
+await session.refresh(asset)
+```
+
+Así el objeto `asset` queda actualizado con el `id` real.
+
+## 8. Schema Response
+
+El `Schema Response` define qué datos devolvemos al cliente. En esta tarea usamos:
+
+```python
+RegisterAssetResponse
+```
+
+No siempre devolvemos todo lo que existe en la tabla. Devolvemos sólo lo que queremos exponer hacia afuera.
+
+Ejemplo:
+
+```json
+{
+  "id": 1,
+  "internal_code": "BOM-001",
+  "name": "Manguera forestal",
+  "category_id": 1
+}
+```
+
+## Resumen mental
+
+```text
+Request valida lo que entra.
+Router ejecuta la acción.
+Modelo representa lo que se quiere guardar.
+Session administra la operación contra PostgreSQL.
+PostgreSQL aplica reglas finales y guarda.
+Response define lo que vuelve al cliente.
+```
+
+No memorices el dibujo. Entendé el recorrido. Cada endpoint nuevo va a repetir una versión parecida de este flujo.
+
+```text
+Cliente / navegador / Swagger docs
+        │
+        │ envía JSON
+        ▼
+Schema de entrada
+RegisterAssetRequest
+        │
+        │ valida los datos
+        ▼
+Router / endpoint
+register_asset()
+        │
+        │ ejecuta la acción solicitada
+        ▼
+Modelo de base de datos
+Asset
+        │
+        │ se agrega a la sesión
+        ▼
+SQLAlchemy Session
+session.add()
+session.commit()
+session.refresh()
+        │
+        │ guarda en PostgreSQL
+        ▼
+Tabla bienes
+PostgreSQL
+        │
+        │ devuelve el registro creado
+        ▼
+Schema de salida
+RegisterAssetResponse
+        │
+        │ responde JSON
+        ▼
+Cliente / navegador / Swagger docs
+```
+
+## Cómo leer este diagrama
+
+| Parte | Qué significa | En qué archivo suele estar |
+|---|---|---|
+| Cliente | Quien llama al endpoint | Navegador, Swagger docs, frontend o test |
+| Schema de entrada | Define qué datos se aceptan | `schemas.py` |
+| Router / endpoint | Define la URL y la función que se ejecuta | `router.py` |
+| Modelo | Representa la tabla de la base de datos | `models.py` |
+| Session | Es el puente entre Python y PostgreSQL | `app/infrastructure/database/session.py` |
+| Tabla | Lugar donde quedan guardados los datos | PostgreSQL |
+| Schema de salida | Define qué JSON se responde | `schemas.py` |
+
+La idea importante es esta:
+
+```text
+El endpoint no es sólo una función.
+Es un recorrido completo desde un JSON de entrada hasta un JSON de respuesta.
+```
+
+## Flujo específico de este endpoint
 
 ```text
 JSON del usuario
@@ -44,6 +351,95 @@ No trabajes directo sobre `main`.
 
 ---
 
+
+# Paso 0 — Crear archivos `__init__.py` vacíos
+
+Antes de crear `schemas.py` y `router.py`, vamos a preparar las carpetas para que Python las pueda importar de forma clara.
+
+## Qué archivos crear
+
+Verificá o creá estos archivos vacíos:
+
+```text
+app/modules/__init__.py
+app/modules/inventory/__init__.py
+app/modules/inventory/register_asset/__init__.py
+app/modules/inventory/shared/__init__.py
+```
+
+Si también existe la carpeta `get_asset`, creá este archivo:
+
+```text
+app/modules/inventory/get_asset/__init__.py
+```
+
+## Cómo crearlos en Windows
+
+Desde PowerShell, parado en la raíz del proyecto:
+
+```powershell
+New-Item -ItemType File -Force app/modules/__init__.py
+New-Item -ItemType File -Force app/modules/inventory/__init__.py
+New-Item -ItemType File -Force app/modules/inventory/register_asset/__init__.py
+New-Item -ItemType File -Force app/modules/inventory/shared/__init__.py
+New-Item -ItemType File -Force app/modules/inventory/get_asset/__init__.py
+```
+
+## Qué contenido llevan
+
+Por ahora pueden quedar vacíos.
+
+```python
+# Este archivo puede quedar vacío.
+# Le indica a Python que esta carpeta forma parte de un paquete importable.
+```
+
+Más adelante podrían usarse para exponer imports más cómodos, pero ahora NO hace falta.
+
+## Para qué sirve `__init__.py`
+
+Un archivo `__init__.py` sirve para marcar una carpeta como parte de un paquete Python.
+
+Un paquete es una carpeta desde donde Python puede importar código.
+
+Por ejemplo, si queremos hacer este import:
+
+```python
+from app.modules.inventory.register_asset.router import router as register_asset_router
+```
+
+Python tiene que poder recorrer este camino:
+
+```text
+app
+  ↓
+modules
+  ↓
+inventory
+  ↓
+register_asset
+  ↓
+router.py
+```
+
+Cada carpeta de ese camino forma parte del import.
+
+Aunque en Python moderno algunos imports pueden funcionar sin `__init__.py`, en este proyecto vamos a usar una regla simple para aprender bien:
+
+```text
+Si una carpeta contiene código Python que vamos a importar, esa carpeta debe tener __init__.py.
+```
+
+Esto nos ayuda a evitar magia innecesaria y hace que la estructura sea más fácil de entender.
+
+## Por qué los creamos ahora
+
+Los creamos antes de `schemas.py` y `router.py` porque después vamos a importar código desde estas carpetas.
+
+Si las carpetas están preparadas desde el principio, el camino del import queda más claro para todos.
+
+---
+
 # Paso 1 — Crear schemas
 
 Crear:
@@ -55,6 +451,12 @@ app/modules/inventory/register_asset/schemas.py
 Copiar:
 
 ```python
+# Archivo donde va este código:
+# app/modules/inventory/register_asset/schemas.py
+#
+# Este archivo NO guarda datos en la base.
+# Sólo define qué datos espera recibir y qué datos va a responder el endpoint.
+
 from pydantic import BaseModel, Field
 
 
@@ -84,6 +486,12 @@ app/modules/inventory/register_asset/router.py
 Copiar:
 
 ```python
+# Archivo donde va este código:
+# app/modules/inventory/register_asset/router.py
+#
+# Acá definimos la ruta POST /inventory/assets.
+# Esta es la función que recibe el JSON, crea el Asset y lo guarda en PostgreSQL.
+
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, status
@@ -101,6 +509,9 @@ router = APIRouter(prefix="/inventory/assets", tags=["Inventory"])
 DatabaseSession = Annotated[AsyncSession, Depends(get_database_session)]
 
 
+# Esta función pertenece al router de registrar bienes.
+# No va en main.py. No va en models.py.
+# Va en app/modules/inventory/register_asset/router.py.
 @router.post("", response_model=RegisterAssetResponse, status_code=status.HTTP_201_CREATED)
 async def register_asset(
     request: RegisterAssetRequest,
@@ -128,14 +539,31 @@ async def register_asset(
     )
 ```
 
-## Qué hace
+## Qué hace la función `register_asset`
 
-- Recibe datos.
-- Crea un objeto `Asset`.
-- Lo agrega a la sesión.
-- Hace `commit` para guardar.
-- Hace `refresh` para obtener el `id` generado.
-- Devuelve la respuesta.
+La función `register_asset` vive en:
+
+```text
+app/modules/inventory/register_asset/router.py
+```
+
+Hace este recorrido:
+
+1. Recibe el JSON que llega desde `/docs` o desde un cliente HTTP.
+2. FastAPI lo convierte en `RegisterAssetRequest`.
+3. Crea un objeto `Asset` usando el modelo de `app/modules/inventory/shared/models.py`.
+4. Lo agrega a la sesión con `session.add(asset)`.
+5. Guarda definitivamente con `await session.commit()`.
+6. Recarga el objeto con `await session.refresh(asset)` para obtener el `id`.
+7. Devuelve un `RegisterAssetResponse`.
+
+Pensalo así:
+
+```text
+schemas.py = define la forma de los datos
+router.py  = define qué hacer cuando llaman al endpoint
+main.py    = conecta el endpoint con la app
+```
 
 ---
 
@@ -150,14 +578,40 @@ app/main.py
 Agregar import:
 
 ```python
+# Archivo donde va este import:
+# app/main.py
+#
+# Este import trae el router que creamos en:
+# app/modules/inventory/register_asset/router.py
 from app.modules.inventory.register_asset.router import router as register_asset_router
 ```
 
 Después de crear `app`, agregar:
 
 ```python
+# Archivo donde va esta línea:
+# app/main.py
+#
+# Sin esta línea, FastAPI no muestra POST /inventory/assets en /docs.
 app.include_router(register_asset_router)
 ```
+
+---
+
+# Checklist de orientación antes de probar
+
+Antes de levantar el servidor, verificá esto:
+
+- [ ] Existe la carpeta `app/modules/inventory/register_asset/`.
+- [ ] Existen los archivos `__init__.py` indicados en el Paso 0.
+- [ ] Existe `app/modules/inventory/register_asset/schemas.py`.
+- [ ] Existe `app/modules/inventory/register_asset/router.py`.
+- [ ] La función `register_asset` está en `router.py`, no en `main.py`.
+- [ ] `main.py` importa `register_asset_router`.
+- [ ] `main.py` tiene `app.include_router(register_asset_router)`.
+- [ ] Las tablas `categorias` y `bienes` ya existen en PostgreSQL.
+
+Si falta cualquiera de estos puntos, no pruebes todavía. Primero corregí la ubicación del código.
 
 ---
 

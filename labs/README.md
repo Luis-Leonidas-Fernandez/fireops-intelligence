@@ -2,6 +2,23 @@
 
 Esta carpeta contiene la ruta de clase para que los participantes aprendan a trabajar con FastAPI, PostgreSQL, SQLAlchemy, Alembic, tests y Git sin tocar `main` directamente.
 
+## Herramientas obligatorias antes de codificar
+
+Antes de empezar con código, cada participante debe tener funcionando:
+
+```text
+Git
+GitHub Desktop o GitHub CLI
+Python
+PostgreSQL
+Visual Studio Code
+Extensiones de VS Code para Python, Ruff y PostgreSQL
+Dependencias instaladas desde requirements.txt
+Codex como asistente de aprendizaje opcional
+```
+
+Codex se puede usar para instalar, diagnosticar y explicar errores. No se debe usar para entregar código que el participante no pueda explicar.
+
 ## Cómo se trabaja en clase
 
 Todos los participantes hacen la misma tarea al mismo tiempo.
@@ -89,3 +106,37 @@ Resultado esperado:
 Error completo:
 Captura si aplica:
 ```
+
+
+## Diagrama visual de endpoints
+
+La Task 03 usa este diagrama para explicar el flujo de datos de cualquier endpoint:
+
+```text
+labs/assets/endpoint-data-flow-nodes.png
+```
+
+Lectura esperada:
+
+```text
+Cliente → Schema Request → Router → Modelo → Session → PostgreSQL → Schema Response → Cliente
+```
+
+La idea central es que un endpoint no es sólo una función. Es un recorrido completo desde un JSON de entrada hasta un JSON de respuesta.
+
+## Decisión frontend para más adelante
+
+Cuando llegue el momento de construir la web, la opción recomendada para la aplicación interna es:
+
+```text
+React + Vite + TypeScript
+```
+
+Motivo:
+
+- enseña separación clara entre frontend y backend;
+- permite consumir FastAPI por HTTP;
+- es más simple para principiantes que Next.js;
+- encaja bien con formularios, tablas, filtros y pantallas administrativas.
+
+Astro puede quedar para documentación o landing pública. Flutter puede quedar para una futura app móvil o tablet.

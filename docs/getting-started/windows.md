@@ -214,6 +214,38 @@ After updating PATH, close and reopen PowerShell.
 
 ---
 
+# 5.1. Add PostgreSQL to PATH correctly
+
+If Windows shows two sections in Environment Variables, use **User variables** first.
+
+Add this folder to the existing `Path` variable:
+
+```text
+C:\Program Files\PostgreSQL\18\bin
+```
+
+Do not create a new variable called `postgresql` and expect `psql` to work. Windows looks for commands inside `Path`.
+
+Correct:
+
+```text
+User variables → Path → Edit → New → C:\Program Files\PostgreSQL\18\bin
+```
+
+Incorrect:
+
+```text
+User variables → New → postgresql = C:\Program Files\PostgreSQL\18\bin
+```
+
+After changing `Path`, close PowerShell and open it again. Then run:
+
+```powershell
+psql --version
+```
+
+---
+
 # 6. Check that PostgreSQL is running
 
 Run:
@@ -785,3 +817,23 @@ Before coding, confirm:
 - [ ] `.env` exists and has `DATABASE_URL`.
 - [ ] `python -m uvicorn app.main:app --reload` starts the API.
 - [ ] `http://127.0.0.1:8000/health` returns `{ "status": "ok" }`.
+
+
+---
+
+# 19. Using Codex during setup
+
+Codex may be used to speed up setup and debugging. Use it for:
+
+- explaining command errors;
+- checking whether PostgreSQL, Git, or Python are installed;
+- diagnosing `.env` mistakes;
+- understanding why a command failed.
+
+Do not use Codex to submit code you cannot explain.
+
+Useful prompt:
+
+```text
+I am learning programming. Guide me step by step. Explain what each command does before I run it. If something fails, help me understand the cause instead of giving me a random list of commands.
+```
