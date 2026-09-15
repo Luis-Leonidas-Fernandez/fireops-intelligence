@@ -65,21 +65,23 @@ Primero tenés que estar dentro de la carpeta del proyecto.
 
 Ejemplo:
 
-```bash
-cd /Users/luis/Desktop/fire-control
+```powershell
+cd "C:\Users\Usuario\Desktop\fireops-intelligence"
 ```
 
 Para verificar dónde estás, ejecutá:
 
-```bash
-pwd
+```powershell
+Get-Location
 ```
 
 Resultado esperado:
 
 ```text
-/Users/luis/Desktop/fire-control
+C:\Users\Usuario\Desktop\fireops-intelligence
 ```
+
+En Windows la ruta puede cambiar según dónde clonaste el proyecto. Lo importante es estar dentro de la carpeta donde existen `app`, `requirements.txt` y `README.md`.
 
 ---
 
@@ -87,7 +89,7 @@ Resultado esperado:
 
 Ejecutá:
 
-```bash
+```powershell
 git branch
 ```
 
@@ -107,7 +109,7 @@ Si ves `* main`, estás en la rama principal.
 
 Antes de crear tu rama, asegurate de estar en `main`:
 
-```bash
+```powershell
 git checkout main
 ```
 
@@ -119,7 +121,7 @@ Esto te mueve a la rama principal.
 
 Ejecutá:
 
-```bash
+```powershell
 git pull
 ```
 
@@ -137,7 +139,7 @@ Porque tu nueva rama debe nacer desde la versión más actualizada posible.
 
 Antes de crear una rama nueva, revisá las ramas que ya tenés en tu máquina:
 
-```bash
+```powershell
 git branch
 ```
 
@@ -157,25 +159,25 @@ Creala con el comando correspondiente.
 
 ## Participante 1
 
-```bash
+```powershell
 git checkout -b participant-1/register-asset-practice
 ```
 
 ## Participante 2
 
-```bash
+```powershell
 git checkout -b participant-2/register-asset-practice
 ```
 
 ## Participante 3
 
-```bash
+```powershell
 git checkout -b participant-3/register-asset-practice
 ```
 
 ## Participante 4
 
-```bash
+```powershell
 git checkout -b participant-4/register-asset-practice
 ```
 
@@ -194,25 +196,25 @@ Sólo cambiate a esa rama.
 
 ## Participante 1
 
-```bash
+```powershell
 git checkout participant-1/register-asset-practice
 ```
 
 ## Participante 2
 
-```bash
+```powershell
 git checkout participant-2/register-asset-practice
 ```
 
 ## Participante 3
 
-```bash
+```powershell
 git checkout participant-3/register-asset-practice
 ```
 
 ## Participante 4
 
-```bash
+```powershell
 git checkout participant-4/register-asset-practice
 ```
 
@@ -222,7 +224,7 @@ git checkout participant-4/register-asset-practice
 
 Ejecutá:
 
-```bash
+```powershell
 git branch
 ```
 
@@ -257,7 +259,7 @@ Ese README te indica qué archivos crear o modificar.
 
 Cuando termines o quieras revisar tu avance, ejecutá:
 
-```bash
+```powershell
 git status
 ```
 
@@ -278,8 +280,8 @@ new file: tests/modules/inventory/test_register_asset.py
 
 Antes de subir tu trabajo, ejecutá:
 
-```bash
-make test
+```powershell
+python -m pytest -v
 ```
 
 Resultado esperado:
@@ -296,7 +298,7 @@ Si falla, no subas todavía. Primero intentá leer el error y pedí ayuda.
 
 Ejecutá:
 
-```bash
+```powershell
 git add .
 ```
 
@@ -310,7 +312,7 @@ Esto le dice a Git:
 
 Ejecutá:
 
-```bash
+```powershell
 git commit -m "feat: practice register asset endpoint"
 ```
 
@@ -336,25 +338,25 @@ Ejecutá el comando correspondiente a tu participante.
 
 ## Participante 1
 
-```bash
+```powershell
 git push -u origin participant-1/register-asset-practice
 ```
 
 ## Participante 2
 
-```bash
+```powershell
 git push -u origin participant-2/register-asset-practice
 ```
 
 ## Participante 3
 
-```bash
+```powershell
 git push -u origin participant-3/register-asset-practice
 ```
 
 ## Participante 4
 
-```bash
+```powershell
 git push -u origin participant-4/register-asset-practice
 ```
 
@@ -393,7 +395,7 @@ Implementé la práctica para crear el endpoint de registrar bienes.
 
 ## Cómo lo probé
 
-- Ejecuté `make test`
+- Ejecuté `python -m pytest -v`
 - Revisé el endpoint en `/docs`
 
 ## Rama
@@ -417,7 +419,7 @@ Cuando la PR esté creada, avisá con este formato:
 Participante: <tu número>
 Rama: participant-X/register-asset-practice
 PR: <link de GitHub>
-Pruebas: make test funcionó / no funcionó
+Pruebas: python -m pytest -v funcionó / no funcionó
 Comentario: <qué hiciste o dónde tuviste problemas>
 ```
 
@@ -427,7 +429,7 @@ Ejemplo:
 Participante: 1
 Rama: participant-1/register-asset-practice
 PR: https://github.com/organizacion/proyecto/pull/1
-Pruebas: make test funcionó
+Pruebas: python -m pytest -v funcionó
 Comentario: pude crear el endpoint y verlo en /docs
 ```
 
@@ -439,7 +441,7 @@ Comentario: pude crear el endpoint y verlo en /docs
 
 No ejecutes:
 
-```bash
+```powershell
 git push origin main
 ```
 
@@ -447,7 +449,7 @@ git push origin main
 
 No ejecutes:
 
-```bash
+```powershell
 git merge
 ```
 
@@ -526,22 +528,22 @@ El usuario envía un JSON con los datos básicos del bien:
 }
 ```
 
-FastAPI recibe la petición, Pydantic valida los datos y el endpoint devuelve una respuesta indicando que el bien fue registrado.
+FastAPI recibe la petición, Pydantic valida los datos, SQLAlchemy guarda el bien en PostgreSQL y el endpoint devuelve el bien creado.
 
 Respuesta esperada:
 
 ```json
 {
+  "id": 1,
   "internal_code": "BOM-001",
   "name": "Manguera forestal",
-  "category_id": 1,
-  "status": "registered"
+  "category_id": 1
 }
 ```
 
 ## Cómo lo probé
 
-- [ ] Ejecuté `make test`
+- [ ] Ejecuté `python -m pytest -v`
 - [ ] El test pasó correctamente
 - [ ] Abrí `http://127.0.0.1:8000/docs`
 - [ ] Vi el endpoint `POST /inventory/assets`
@@ -600,22 +602,22 @@ El usuario envía un JSON con los datos básicos del bien:
 }
 ```
 
-FastAPI recibe la petición, Pydantic valida los datos y el endpoint devuelve una respuesta indicando que el bien fue registrado.
+FastAPI recibe la petición, Pydantic valida los datos, SQLAlchemy guarda el bien en PostgreSQL y el endpoint devuelve el bien creado.
 
 Respuesta esperada:
 
 ```json
 {
+  "id": 1,
   "internal_code": "BOM-001",
   "name": "Manguera forestal",
-  "category_id": 1,
-  "status": "registered"
+  "category_id": 1
 }
 ```
 
 ## Cómo lo probé
 
-- [x] Ejecuté `make test`
+- [x] Ejecuté `python -m pytest -v`
 - [x] El test pasó correctamente
 - [x] Abrí `http://127.0.0.1:8000/docs`
 - [x] Vi el endpoint `POST /inventory/assets`
@@ -642,7 +644,7 @@ El responsable del proyecto va a revisar:
 - que los archivos estén en las carpetas correctas;
 - que el endpoint aparezca en `/docs`;
 - que el test exista;
-- que `make test` pase;
+- que `python -m pytest -v` pase;
 - que el participante pueda explicar con sus palabras qué hizo.
 
 La Pull Request no es sólo para subir código.
@@ -659,7 +661,7 @@ Pero antes de crear el commit, revisá si quedaron prints de práctica en el có
 
 Ejecutá:
 
-```bash
+```powershell
 git diff
 ```
 
@@ -683,8 +685,8 @@ Eso ensucia el código y hace más difícil revisar.
 
 # Resumen rápido
 
-```bash
-cd /Users/luis/Desktop/fire-control
+```powershell
+cd "C:\Users\Usuario\Desktop\fireops-intelligence"
 git checkout main
 git pull
 git branch
@@ -696,7 +698,7 @@ git checkout -b participant-X/register-asset-practice
 git checkout participant-X/register-asset-practice
 
 # Hacer la tarea
-make test
+python -m pytest -v
 
 git status
 git add .

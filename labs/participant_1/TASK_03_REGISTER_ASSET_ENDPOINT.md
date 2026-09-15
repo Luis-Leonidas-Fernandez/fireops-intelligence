@@ -473,6 +473,21 @@ class RegisterAssetResponse(BaseModel):
     category_id: int
 ```
 
+## Qué significan los imports de `schemas.py`
+
+| Import | Para qué sirve |
+|---|---|
+| `BaseModel` | Es la base de Pydantic para crear schemas de entrada y salida. |
+| `Field` | Permite agregar reglas de validación, como largo mínimo, largo máximo o número mayor que cero. |
+
+Ejemplo:
+
+```python
+internal_code: str = Field(min_length=3, max_length=30)
+```
+
+Eso significa: `internal_code` debe ser texto y debe tener entre 3 y 30 caracteres.
+
 ---
 
 # Paso 2 — Crear router con DB
@@ -539,6 +554,27 @@ async def register_asset(
     )
 ```
 
+## Qué significan los imports de `router.py`
+
+| Import | Para qué sirve |
+|---|---|
+| `Annotated` | Permite combinar un tipo de dato con una dependencia de FastAPI. Lo usamos para declarar la sesión de base de datos. |
+| `APIRouter` | Permite agrupar endpoints de inventario en un router separado. |
+| `Depends` | Le pide a FastAPI que inyecte una dependencia, en este caso la sesión de base de datos. |
+| `status` | Nos permite usar nombres claros para códigos HTTP, como `HTTP_201_CREATED`. |
+| `AsyncSession` | Es el tipo de sesión async de SQLAlchemy para hablar con PostgreSQL. |
+| `get_database_session` | Crea y entrega una sesión de base de datos al endpoint. |
+| `RegisterAssetRequest` | Schema que valida el JSON que entra. |
+| `RegisterAssetResponse` | Schema que define el JSON que responde el endpoint. |
+| `Asset` | Modelo SQLAlchemy que representa la tabla `bienes`. |
+
+Idea clave:
+
+```text
+El router necesita imports de FastAPI, de la base de datos, de los schemas y del modelo.
+Por eso este archivo conecta varias partes del proyecto.
+```
+
 ## Qué hace la función `register_asset`
 
 La función `register_asset` vive en:
@@ -585,6 +621,30 @@ Agregar import:
 # app/modules/inventory/register_asset/router.py
 from app.modules.inventory.register_asset.router import router as register_asset_router
 ```
+
+## Qué significa el import en `main.py`
+
+```python
+from app.modules.inventory.register_asset.router import router as register_asset_router
+```
+
+Este import trae el router creado en la carpeta `register_asset`.
+
+Usamos el alias:
+
+```python
+as register_asset_router
+```
+
+porque más adelante puede haber muchos routers. Por ejemplo:
+
+```python
+register_asset_router
+get_asset_router
+update_asset_router
+```
+
+Así `main.py` queda claro y no tenemos muchas variables llamadas simplemente `router`.
 
 Después de crear `app`, agregar:
 

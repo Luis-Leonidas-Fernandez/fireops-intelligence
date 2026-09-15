@@ -107,6 +107,24 @@ async def test_register_asset_creates_asset() -> None:
     assert data["category_id"] == category_id
 ```
 
+## Qué significan los imports del test
+
+| Import | Para qué sirve |
+|---|---|
+| `uuid4` | Genera un código distinto para cada test y evita repetir `codigo_interno`. |
+| `pytest` | Framework que ejecuta las pruebas automáticas. |
+| `ASGITransport` | Permite probar la app FastAPI sin levantar un servidor real con Uvicorn. |
+| `AsyncClient` | Cliente HTTP async usado para llamar al endpoint desde el test. |
+| `text` | Permite ejecutar SQL manual cuando necesitamos preparar datos de prueba. |
+| `AsyncSessionLocal` | Crea una sesión de base de datos para preparar la categoría de prueba. |
+| `app` | Es la aplicación FastAPI real que vamos a probar. |
+
+Idea clave:
+
+```text
+El test importa la app real, crea datos mínimos en PostgreSQL y llama al endpoint como si fuera un cliente.
+```
+
 ## Por qué el test crea o busca una categoría
 
 El bien necesita una `categoria_id` válida.

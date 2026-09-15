@@ -7,77 +7,139 @@ categorias
 bienes
 ```
 
-No vamos a crear todo el modelo patrimonial todavía. Vamos a empezar con una unidad pequeña pero real.
+No vamos a crear todo el sistema patrimonial todavía. Vamos a empezar con una relación pequeña, real y fácil de entender.
 
-## Por qué empezamos con estas dos tablas
+---
 
-Un bien necesita una categoría.
+# Objetivo de la clase
 
-Ejemplos:
+Al terminar esta tarea, la base de datos `fireassets` debe tener estas tablas:
 
 ```text
-Categoría: Mangueras
-Bien: Manguera forestal 30m
-
-Categoría: Cascos
-Bien: Casco estructural rojo
+categorias
+bienes
 ```
 
-La relación es:
+Y la relación debe ser:
 
 ```text
 categorias 1 ─── N bienes
 ```
 
-Esto significa:
+Eso significa:
 
-> Una categoría puede tener muchos bienes, pero cada bien pertenece a una categoría.
+> Una categoría puede tener muchos bienes, pero cada bien pertenece a una sola categoría.
 
-## Objetivo
+Ejemplo:
 
-Crear o modificar:
+```text
+Categoría: Mangueras
+  ├── Bien: Manguera forestal 30m
+  └── Bien: Manguera estructural 25m
+```
+
+---
+
+# Reparto de responsabilidades
+
+## Responsable / instructor
+
+El instructor deja preparado:
+
+```text
+migrations/env.py
+```
+
+Ese archivo debe estar conectado a:
+
+- `.env`;
+- `DATABASE_URL`;
+- `Base.metadata`;
+- modelos de inventario.
+
+Los participantes NO deben modificar `migrations/env.py` en esta etapa.
+
+## Participantes
+
+Los participantes trabajan principalmente sobre:
 
 ```text
 app/modules/inventory/shared/models.py
-migrations/env.py
-migrations/versions/<revision>_create_categories_and_assets_tables.py
 ```
 
-## Flujo
+Después ejecutan la migración guiados por el instructor.
+
+La idea no es aprender todo Alembic de golpe. Primero deben entender:
+
+- qué es una tabla;
+- qué es una columna;
+- qué es un `id`;
+- qué significa `unique`;
+- qué significa `nullable`;
+- qué significa `ForeignKey`;
+- qué significa una relación 1 a N.
+
+---
+
+# Archivos involucrados
+
+| Archivo | Quién lo toca | Para qué sirve |
+|---|---|---|
+| `app/modules/inventory/shared/models.py` | Participante | Define los modelos `Category` y `Asset` |
+| `migrations/env.py` | Instructor | Le dice a Alembic dónde encontrar modelos y `DATABASE_URL` |
+| `migrations/versions/<revision>.py` | Instructor o grupo guiado | Contiene la migración que crea las tablas |
+| PostgreSQL | Todos verifican | Lugar donde finalmente aparecen las tablas |
+
+---
+
+# Flujo general
 
 ```text
-modelo Category + modelo Asset
-  ↓
+models.py
+  ↓ define Category y Asset
 Base.metadata
-  ↓
-Alembic detecta los modelos
-  ↓
-migración crea tablas categorias y bienes
-  ↓
-PostgreSQL tiene tablas relacionadas
+  ↓ registra los modelos
+migrations/env.py
+  ↓ entrega metadata y DATABASE_URL a Alembic
+migración
+  ↓ crea instrucciones para PostgreSQL
+alembic upgrade head
+  ↓ aplica esas instrucciones
+PostgreSQL
+  ↓ muestra categorias y bienes
 ```
 
-## Antes de empezar
+---
 
-Antes de tocar código, creá o activá tu rama siguiendo:
+# Antes de empezar
+
+Antes de tocar código, verificá:
+
+- [ ] PostgreSQL está corriendo.
+- [ ] La base `fireassets` existe.
+- [ ] El archivo `.env` existe.
+- [ ] `DATABASE_URL` apunta a `fireassets`.
+- [ ] El entorno virtual `.venv` está activo.
+- [ ] Las dependencias están instaladas.
+- [ ] Estás en tu rama, no en `main`.
+
+Para la rama, seguí:
 
 ```text
 GIT_WORKFLOW.md
 ```
 
-No trabajes directo sobre `main`.
-
 ---
 
 # Paso 1 — Crear los modelos
 
-Abrir:
+Abrí:
 
 ```text
 app/modules/inventory/shared/models.py
 ```
 
-Copiar:
+Copiá este código:
 
 ```python
 from sqlalchemy import BigInteger, ForeignKey, String
@@ -106,22 +168,68 @@ class Asset(Base):
     )
 ```
 
-## Qué hace `Category`
+---
 
-`Category` representa la tabla:
+# Paso 2 — Entender el código del modelo
+
+No copies sin entender. Este bloque define cómo Python representa las tablas que después existirán en PostgreSQL.
+
+## Imports
+
+| Import | Para qué sirve |
+|---|---|
+| `BigInteger` | Define columnas numéricas grandes, como los `id`. |
+| `ForeignKey` | Crea una relación entre dos tablas. |
+| `String` | Define columnas de texto con un largo máximo. |
+| `Mapped` | Indica que un atributo Python está conectado a una columna de base de datos. |
+| `mapped_column` | Crea una columna real de la tabla. |
+| `Base` | Clase base que registra los modelos para SQLAlchemy y Alembic. |
+
+Idea clave:
 
 ```text
-categorias
+Los imports no son decoración.
+Cada import habilita una herramienta que usamos después.
 ```
 
-Tiene:
+## `Category`
 
-| Campo | Significado |
-|---|---|
-| `id` | identificador único |
-| `nombre` | nombre de la categoría |
+```python
+class Category(Base):
+```
 
-Ejemplos de categorías:
+Crea un modelo SQLAlchemy. Al heredar de `Base`, SQLAlchemy puede registrar esta clase como tabla.
+
+```python
+__tablename__ = "categorias"
+```
+
+Define el nombre real de la tabla en PostgreSQL.
+
+```python
+id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+```
+
+Define el identificador único de cada categoría.
+
+- `Mapped[int]`: en Python será un número entero.
+- `mapped_column(...)`: será una columna de la tabla.
+- `BigInteger`: será un número grande en PostgreSQL.
+- `primary_key=True`: identifica cada fila.
+- `autoincrement=True`: PostgreSQL genera el número automáticamente.
+
+```python
+nombre: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+```
+
+Define el nombre de la categoría.
+
+- `Mapped[str]`: en Python será texto.
+- `String(100)`: máximo 100 caracteres.
+- `unique=True`: no se puede repetir.
+- `nullable=False`: es obligatorio.
+
+Ejemplos válidos:
 
 ```text
 Mangueras
@@ -130,116 +238,216 @@ Radios
 Vehículos
 ```
 
-## Qué hace `Asset`
-
-`Asset` representa la tabla:
-
-```text
-bienes
-```
-
-Tiene:
-
-| Campo | Significado |
-|---|---|
-| `id` | identificador único |
-| `codigo_interno` | código interno del bien |
-| `nombre` | nombre del bien |
-| `categoria_id` | categoría a la que pertenece |
-
-## Qué significa `ForeignKey`
-
-Esta línea:
+## `Asset`
 
 ```python
-ForeignKey("categorias.id")
+class Asset(Base):
 ```
 
-significa:
+Crea el modelo que representa un bien.
 
-> `categoria_id` debe apuntar a una categoría existente.
+```python
+__tablename__ = "bienes"
+```
 
-Eso evita que un bien quede asociado a una categoría inexistente.
+Define que la tabla real se llamará `bienes`.
+
+```python
+id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+```
+
+Identificador único del bien.
+
+```python
+codigo_interno: Mapped[str] = mapped_column(String(30), unique=True, nullable=False)
+```
+
+Código interno del bien.
+
+- `String(30)`: máximo 30 caracteres.
+- `unique=True`: no puede repetirse.
+- `nullable=False`: es obligatorio.
+
+Ejemplo:
+
+```text
+BOM-001
+```
+
+Esto es importante porque dos bienes distintos no deberían tener el mismo código interno.
+
+```python
+nombre: Mapped[str] = mapped_column(String(150), nullable=False)
+```
+
+Nombre descriptivo del bien.
+
+Ejemplo:
+
+```text
+Manguera forestal 30m
+```
+
+```python
+categoria_id: Mapped[int] = mapped_column(
+    BigInteger,
+    ForeignKey("categorias.id"),
+    nullable=False,
+)
+```
+
+Conecta el bien con una categoría.
+
+- `categoria_id`: guarda el `id` de una categoría.
+- `ForeignKey("categorias.id")`: obliga a que esa categoría exista.
+- `nullable=False`: todo bien debe tener categoría.
+
+Ejemplo correcto:
+
+```text
+categorias
+id: 1
+nombre: Mangueras
+
+bienes
+codigo_interno: BOM-001
+nombre: Manguera forestal 30m
+categoria_id: 1
+```
+
+Ejemplo incorrecto:
+
+```text
+codigo_interno: BOM-999
+nombre: Bien sin categoría real
+categoria_id: 99999
+```
+
+Si no existe una categoría con `id = 99999`, PostgreSQL debe rechazar ese registro.
 
 ---
 
-# Paso 2 — Conectar metadata con Alembic
+# Paso 3 — Verificar que Alembic está preparado
 
-Abrir:
+Este paso es sólo de lectura. Los participantes no deben modificar este archivo ahora.
+
+Abrí:
 
 ```text
 migrations/env.py
 ```
 
-Buscar:
+Debe existir una parte parecida a esta:
 
 ```python
-target_metadata = None
-```
-
-Reemplazar por:
-
-```python
+from app.config.settings import get_settings
 from app.infrastructure.database.base import Base
 from app.modules.inventory.shared import models  # noqa: F401
+
+settings = get_settings()
+config.set_main_option("sqlalchemy.url", settings.database_url)
 
 target_metadata = Base.metadata
 ```
 
-## Qué hace
+Qué significa:
 
-Alembic necesita ver `Base.metadata` para saber qué tablas existen en Python.
+| Línea | Significado |
+|---|---|
+| `get_settings()` | Lee la configuración del proyecto, incluyendo `.env`. |
+| `Base` | Trae el registro de modelos SQLAlchemy. |
+| `models` | Carga `Category` y `Asset`. |
+| `config.set_main_option(...)` | Le pasa `DATABASE_URL` a Alembic. |
+| `target_metadata = Base.metadata` | Le dice a Alembic qué tablas debe mirar. |
 
-El import de `models` hace que Python cargue `Category` y `Asset`.
+Si eso no está, no sigas. Avisá al instructor.
 
 ---
 
-# Paso 3 — Crear la migración
+# Paso 4 — Ejecutar migración y verificar tablas
 
-Ejecutar:
+Este es el único bloque de comandos de migración de esta tarea.
+
+Ejecutalo desde la raíz del proyecto, con `.venv` activo.
+
+## 4.1 Verificar ubicación
 
 ```powershell
-alembic revision --autogenerate -m "create categories and assets tables"
+Get-Location
+Get-ChildItem
 ```
 
-Esto debe crear un archivo en:
+Tenés que ver archivos como:
+
+```text
+app
+alembic.ini
+migrations
+requirements.txt
+```
+
+## 4.2 Verificar Alembic
+
+```powershell
+python -m alembic --version
+```
+
+## 4.3 Crear la migración
+
+Este paso puede hacerlo el instructor o el grupo junto al instructor.
+
+```powershell
+python -m alembic revision --autogenerate -m "create categories and assets tables"
+```
+
+Esto crea un archivo nuevo dentro de:
 
 ```text
 migrations/versions/
 ```
 
-Abrilo y verificá que aparezcan dos tablas:
+No sigas si la migración sale vacía. Avisá al instructor.
+
+## 4.4 Revisar la migración creada
+
+Abrí el archivo nuevo dentro de `migrations/versions/`.
+
+Debe contener algo parecido a:
 
 ```python
 op.create_table("categorias", ...)
 op.create_table("bienes", ...)
 ```
 
-También debería aparecer una clave foránea desde `bienes.categoria_id` hacia `categorias.id`.
+También debe aparecer la relación entre:
 
----
-
-# Paso 4 — Aplicar la migración
-
-Ejecutar:
-
-```powershell
-alembic upgrade head
+```text
+bienes.categoria_id
+categorias.id
 ```
 
-Resultado esperado: no debe mostrar error.
+Idea clave:
 
----
+```text
+Alembic propone instrucciones.
+Nosotros revisamos antes de ejecutarlas.
+```
 
-# Paso 5 — Verificar en PostgreSQL
+## 4.5 Aplicar la migración
 
-Entrar:
+```powershell
+python -m alembic upgrade head
+```
+
+Esto aplica la migración en PostgreSQL.
+
+## 4.6 Entrar a PostgreSQL
 
 ```powershell
 psql -U postgres -d fireassets
 ```
 
-Listar tablas:
+## 4.7 Verificar tablas
 
 ```sql
 \dt
@@ -252,25 +460,25 @@ categorias
 bienes
 ```
 
-Ver estructura de `bienes`:
+## 4.8 Ver estructura de `bienes`
 
 ```sql
 \d bienes
 ```
 
-Buscá que exista:
+Buscá:
 
 ```text
 categoria_id
 ```
 
-Y que tenga una relación con:
+Y una referencia hacia:
 
 ```text
 categorias(id)
 ```
 
-Salir:
+## 4.9 Salir de PostgreSQL
 
 ```sql
 \q
@@ -278,9 +486,17 @@ Salir:
 
 ---
 
-# Paso 6 — Insertar datos de prueba manualmente
+# Paso 5 — Insertar datos de prueba
 
-Para entender la relación, podés probar esto dentro de PostgreSQL:
+Ahora vamos a probar la relación manualmente en PostgreSQL.
+
+Entrá a la base:
+
+```powershell
+psql -U postgres -d fireassets
+```
+
+Crear una categoría:
 
 ```sql
 INSERT INTO categorias (nombre)
@@ -295,7 +511,7 @@ id | nombre
 1  | Mangueras
 ```
 
-Ahora insertá un bien usando esa categoría:
+Crear un bien usando esa categoría:
 
 ```sql
 INSERT INTO bienes (codigo_interno, nombre, categoria_id)
@@ -305,9 +521,11 @@ RETURNING id, codigo_interno, nombre, categoria_id;
 
 Si funciona, la relación está bien.
 
-## Prueba de error esperada
+---
 
-Ahora intentá insertar un bien con una categoría que no existe:
+# Paso 6 — Probar un error esperado
+
+Intentá crear un bien con una categoría inexistente:
 
 ```sql
 INSERT INTO bienes (codigo_interno, nombre, categoria_id)
@@ -320,57 +538,43 @@ Esto debería fallar.
 
 Porque `99999` no existe en `categorias.id`.
 
-Ese error demuestra que la clave foránea está protegiendo los datos.
+Ese error es bueno para aprender: demuestra que `ForeignKey` protege los datos.
+
+Salir:
+
+```sql
+\q
+```
 
 ---
 
-# Paso 7 — Ver las tablas desde Visual Studio Code
+# Paso 7 — Ver tablas desde Visual Studio Code
 
-Después de verificar las tablas con terminal, también podés verlas de forma visual en Visual Studio Code.
+Después de verificar por terminal, podés usar la extensión de PostgreSQL en VS Code.
 
-Esto es útil para entender mejor qué se creó en PostgreSQL.
-
-## Extensión recomendada
-
-Instalar esta extensión en Visual Studio Code:
+Extensión recomendada:
 
 ```text
 PostgreSQL
 ```
 
-ID de la extensión:
+ID:
 
 ```text
 ms-ossdata.vscode-pgsql
 ```
 
-Marketplace:
-
-```text
-https://marketplace.visualstudio.com/items?itemName=ms-ossdata.vscode-pgsql
-```
-
-## Datos de conexión en Windows
-
-Usar estos datos:
+Datos de conexión en Windows:
 
 ```text
 Host: localhost
 Port: 5432
 Database: fireassets
 Username: postgres
-Password: la contraseña que configuraste al instalar PostgreSQL
+Password: la contraseña configurada al instalar PostgreSQL
 ```
 
-Esto equivale a esta URL:
-
-```env
-DATABASE_URL=postgresql+asyncpg://postgres:TU_PASSWORD@localhost:5432/fireassets
-```
-
-## Qué deberías ver
-
-Después de conectarte, buscá algo parecido a:
+Deberías ver algo parecido a:
 
 ```text
 fireassets
@@ -381,44 +585,46 @@ fireassets
               └── bienes
 ```
 
-## Para qué usamos esta extensión
-
-La extensión sirve para mirar visualmente:
-
-- qué bases existen;
-- qué tablas existen;
-- qué columnas tiene cada tabla;
-- qué datos se insertaron.
-
-Pero ojo:
-
-> La extensión ayuda a visualizar. No reemplaza entender los comandos SQL.
-
-Primero verificamos por terminal. Después usamos la extensión como apoyo visual.
+La extensión ayuda a mirar visualmente, pero no reemplaza entender SQL.
 
 ---
 
 # Uso de mensajes para aprender
 
-En esta tarea trabajamos dentro de PostgreSQL. En SQL no usamos `print()` como en Python, pero podemos usar consultas para ver qué está pasando.
+En SQL no usamos `print()` como en Python, pero podemos hacer consultas que nos muestren qué pasó.
 
-Después de insertar una categoría, ejecutá:
+Después de insertar una categoría:
 
 ```sql
 SELECT 'Categoría creada o encontrada' AS mensaje;
 SELECT id, nombre FROM categorias WHERE nombre = 'Mangueras';
 ```
 
-Después de insertar un bien, ejecutá:
+Después de insertar un bien:
 
 ```sql
 SELECT 'Bien creado' AS mensaje;
 SELECT id, codigo_interno, nombre, categoria_id FROM bienes WHERE codigo_interno = 'BOM-001';
 ```
 
-Estos mensajes son sólo para aprender y mirar el flujo.
+Estos comandos son sólo para practicar en la terminal. No se guardan en archivos del proyecto.
 
-> Antes de subir la Pull Request, no hace falta guardar estos comandos en archivos del proyecto. Sólo usalos en la terminal durante la práctica.
+---
+
+# Checklist final
+
+Antes de cerrar la tarea, confirmá:
+
+- [ ] `models.py` tiene `Category`.
+- [ ] `models.py` tiene `Asset`.
+- [ ] `migrations/env.py` tiene `target_metadata = Base.metadata`.
+- [ ] Existe una migración nueva en `migrations/versions/`.
+- [ ] `python -m alembic upgrade head` terminó sin error.
+- [ ] `\dt` muestra `categorias` y `bienes`.
+- [ ] `\d bienes` muestra `categoria_id`.
+- [ ] Pudiste insertar una categoría.
+- [ ] Pudiste insertar un bien con una categoría válida.
+- [ ] La prueba con categoría inexistente falló como esperábamos.
 
 ---
 
@@ -428,9 +634,9 @@ Entregá:
 
 - archivo `models.py` actualizado;
 - archivo de migración creado;
-- resultado de `alembic upgrade head`;
+- resultado de `python -m alembic upgrade head`;
 - captura o texto mostrando `\dt` con `categorias` y `bienes`;
-- explicación breve de qué significa esta relación:
+- explicación breve de qué significa:
 
 ```text
 categorias 1 ─── N bienes
@@ -440,7 +646,7 @@ categorias 1 ─── N bienes
 
 # Qué aprendiste
 
-Aprendiste a crear dos tablas relacionadas.
+Aprendiste a crear dos tablas relacionadas desde código.
 
 Eso es más importante que crear muchas tablas sin entenderlas.
 
