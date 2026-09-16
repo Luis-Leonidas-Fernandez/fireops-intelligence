@@ -67,6 +67,12 @@ temp/
 # Alembic temporary files
 alembic.ini.bak
 
+# Local Alembic practice migrations
+# During class, participants generate their own migration files.
+# The instructor will decide which migration becomes official.
+# Add the official migration explicitly with: git add -f migrations/versions/<file>.py
+migrations/versions/*.py
+
 # Uploaded or generated local files
 uploads/
 storage/
