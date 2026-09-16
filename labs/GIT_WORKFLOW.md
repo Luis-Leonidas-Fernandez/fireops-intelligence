@@ -248,7 +248,7 @@ Ahora sí, seguí el README de tu carpeta.
 Ejemplo:
 
 ```text
-labs/participant_1/README.md
+labs/README.md
 ```
 
 Ese README te indica qué archivos crear o modificar.
