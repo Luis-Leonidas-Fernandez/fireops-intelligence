@@ -84,3 +84,5 @@ settings.local.*
 
 # Keep empty directories when needed
 !.gitkeep
+# Local Word teaching artifacts
+labs/TASK_04_ENDPOINTS_CATEGORIAS.docx
