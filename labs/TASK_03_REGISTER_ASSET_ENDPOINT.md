@@ -933,6 +933,14 @@ Abrir:
 http://127.0.0.1:8000/docs
 ```
 
+En Swagger UI:
+
+1. Buscar `POST /inventory/assets`.
+2. Hacer clic en `Try it out`.
+3. Pegar el JSON de prueba.
+4. Hacer clic en `Execute`.
+5. Revisar la respuesta.
+
 Probar `POST /inventory/assets` con:
 
 ```json
