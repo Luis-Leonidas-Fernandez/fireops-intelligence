@@ -6,6 +6,34 @@ La **Task 03 ya está completada** y no se modifica en esta tarea. El endpoint d
 POST /inventory/assets
 ```
 
+---
+
+## Requisito previo obligatorio
+
+Antes de comenzar esta tarea, hay que completar la guía de herramientas de Visual Studio Code y PostgreSQL:
+
+```text
+vscode-tools.md
+```
+
+No empieces a crear código hasta verificar estos puntos:
+
+- [ ] SQLTools está instalado y habilitado.
+- [ ] SQLTools PostgreSQL/Cockroach Driver está instalado y habilitado.
+- [ ] La conexión `FireAssets` está creada.
+- [ ] La conexión apunta a la base `fireassets`.
+- [ ] PostgreSQL está ejecutándose.
+- [ ] Las tablas `categorias` y `bienes` existen.
+- [ ] Esta consulta devuelve `fireassets`:
+
+```sql
+SELECT current_database(), current_user;
+```
+
+- [ ] SQLTools permite consultar la base sin mostrar `sql_learning`.
+
+Si alguno de estos puntos falla, primero corregí la configuración siguiendo `vscode-tools.md`. La Task 04 comienza únicamente cuando la conexión y las tablas están verificadas.
+
 En esta tarea vamos a trabajar únicamente en lo que falta: administrar categorías desde la API.
 
 ## Objetivo
