@@ -93,21 +93,13 @@ El resultado esperado es:
 fireassets_test
 ```
 
-### Crear las tablas en la base de tests
+### Configurar `.env` y `.env.test`
 
-La base nueva comienza vacía. Antes de ejecutar los tests, aplicá allí las migraciones:
-
-```bash
-python -m alembic upgrade head
-```
-
-> Importante: este comando usa la `DATABASE_URL` configurada en el entorno. Para no aplicar la migración por accidente sobre `fireassets`, configurá temporalmente la URL apuntando a `fireassets_test` y verificá la base antes de continuar.
+La base nueva comienza vacía. El proyecto usa `.env` para la aplicación normal y `.env.test` para los tests.
 
 Los tests deben conectarse a `fireassets_test`, no a `fireassets`.
 
-### Configurar `.env` y `.env.test`
-
-El proyecto usa `.env` por defecto. Para los tests vamos a crear un archivo separado llamado `.env.test`.
+Creamos un archivo separado llamado `.env.test`.
 
 `.env`:
 
@@ -144,6 +136,8 @@ macOS/Linux:
 ```
 
 Los scripts verifican que `.env.test` exista y trabajan sobre `fireassets_test`. No modifican `.env` ni la base `fireassets`.
+
+Los scripts también aplican automáticamente las migraciones sobre `fireassets_test` antes de ejecutar pytest. No es necesario ejecutar `alembic upgrade head` manualmente.
 
 Los archivos son:
 
@@ -507,31 +501,23 @@ Si se elimina `await`, Python no ejecuta correctamente la solicitud y devuelve u
 
 # 7. Ejecutar todos los tests
 
-Desde la raíz del proyecto y con el entorno virtual activo:
+Desde la raíz del proyecto y con el entorno virtual activo, ejecutá el script correspondiente. El script selecciona `.env.test`, aplica las migraciones y luego ejecuta todos los tests.
 
 ### Windows
 
 ```powershell
-python -m pytest -v -s
+.\scripts\task05_run_tests_windows.ps1
 ```
 
 ### macOS o Linux
 
 ```bash
-python -m pytest -v -s
+./scripts/task05_run_tests_mac.sh
 ```
 
 - `-m pytest`: ejecuta pytest usando el Python actual.
 - `-v`: muestra el nombre de cada test.
 - `-s`: muestra los `print()` de la consola.
-
-Para ejecutar un archivo específico:
-
-```bash
-python -m pytest tests/test_main_endpoints.py -v -s
-python -m pytest tests/modules/inventory/test_category_endpoints.py -v -s
-python -m pytest tests/modules/inventory/test_asset_endpoints.py -v -s
-```
 
 Resultado esperado aproximado:
 
