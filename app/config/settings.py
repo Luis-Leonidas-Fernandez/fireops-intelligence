@@ -1,4 +1,5 @@
 from functools import lru_cache
+import os
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -13,8 +14,8 @@ class Settings(BaseSettings):
     secret_key: str
 
     model_config = SettingsConfigDict(
-        #busca el archivo .env
-        env_file=".env",
+        # Lee .env por defecto o el archivo indicado por ENV_FILE.
+        env_file=os.getenv("ENV_FILE", ".env"),
         env_file_encoding="utf-8",
         extra="ignore",
     )
