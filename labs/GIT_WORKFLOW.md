@@ -243,15 +243,19 @@ El `*` debe estar en tu rama, no en `main`.
 
 ## Paso 7 — Hacer la tarea
 
-Ahora sí, seguí el README de tu carpeta.
+Ahora sí, abrí la guía de la tarea asignada. Para consultar el archivo de guías completadas, usá el índice archivado; la tarea activa Task 06 está directamente en `labs/`.
 
-Ejemplo:
+Índice de tareas completadas:
 
 ```text
-labs/README.md
+labs/completed/README.md
 ```
 
-Ese README te indica qué archivos crear o modificar.
+Guía activa:
+
+```text
+labs/TASK_06_GET_ASSET_BY_ID.md
+```
 
 ---
 

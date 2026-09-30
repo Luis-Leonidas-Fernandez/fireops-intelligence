@@ -2,6 +2,28 @@
 
 Esta guía sirve para arrancar el proyecto localmente sin tener que recordar todos los comandos.
 
+## Arranque rápido con la base de pruebas
+
+Desde la raíz del proyecto, ejecutá el comando de tu sistema:
+
+**macOS:**
+
+```bash
+./scripts/test-up.sh
+```
+
+**Windows — PowerShell:**
+
+```powershell
+.\scripts\test-up.ps1
+```
+
+El script usa el Python de `.venv` (no hace falta activarlo manualmente), carga `.env.test` y levanta la API con `fireassets_test`. Verifica la base configurada antes de iniciar y se detiene si no es `fireassets_test`. Para detener la API, presioná `Ctrl+C`.
+
+Requisitos: PostgreSQL debe estar iniciado, y en la raíz deben existir `.env.test` y `.venv` con las dependencias instaladas. El script no crea la base de datos ni instala dependencias.
+
+Para que tus compañeros tengan los scripts después de hacer `git pull`, incluílos en el commit y subilo a GitHub. Cada participante debe configurar su propio `.env.test` y `.venv`.
+
 > Importante: el proyecto **no levanta PostgreSQL automáticamente**. Primero debe estar corriendo PostgreSQL y después se levanta la API con FastAPI/Uvicorn.
 
 ---
@@ -258,4 +280,3 @@ Funciona tanto en macOS/Linux como en Windows cuando el entorno está activo.
 - [ ] Las tablas `categorias` y `bienes` existen.
 - [ ] Levanté la API con `python -m uvicorn app.main:app --reload`.
 - [ ] Abrí `http://127.0.0.1:8000/docs`.
-
