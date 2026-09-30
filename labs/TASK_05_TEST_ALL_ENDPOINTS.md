@@ -169,6 +169,8 @@ python -m pip install -r requirements.txt
 
 Ese archivo debe incluir `pytest` y `pytest-asyncio`, porque los tests usan `pytest` y funciones `async`.
 
+El proyecto también configura pytest en `pyproject.toml` para que todos los tests async compartan el mismo event loop. Esto evita el error `Future attached to a different loop` cuando SQLAlchemy reutiliza conexiones entre tests.
+
 Verificá la base con:
 
 ```sql
