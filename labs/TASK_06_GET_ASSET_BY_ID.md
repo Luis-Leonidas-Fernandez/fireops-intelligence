@@ -1,6 +1,6 @@
 # Tarea 06: listar activos y consultar por ID
 
-Esta guía define el alcance de implementación y verificación de la Tarea 06; no implementa los endpoints. El repositorio ya permite registrar activos y consultar categorías, pero todavía no cuenta con rutas GET para activos.
+Esta guía define el alcance de implementación y verificación de la Tarea 06; no implementa los endpoints. El repositorio ya permite registrar activos y consultar categorías, pero todavía no cuenta con rutas GET para activos. Los archivos propuestos para el router de lectura y sus tests ya existen vacíos y sin seguimiento de Git: editarlos, no recrearlos.
 
 ## Objetivo
 
@@ -54,25 +54,29 @@ No se necesita una migración: ambas tablas ya existen y esta tarea solo agrega 
 
 ## Crear los archivos que faltan
 
-Ejecutá los comandos desde la raíz del repositorio. En el estado actual faltan `router.py` y el archivo nuevo de tests. `app/main.py`, el directorio de tests y `get_asset/__init__.py` ya existen: **no los crees ni reemplaces**. La fixture `isolated_asset_session` se agregará dentro del archivo de tests.
+En este checkout, `app/modules/inventory/get_asset/router.py` y `tests/modules/inventory/test_get_asset_endpoint.py` **ya existen como archivos vacíos no registrados en Git**. No ejecutes comandos de creación para ellos: abrilos y completalos. `app/main.py`, el directorio de tests y `get_asset/__init__.py` también existen: no los recrees ni reemplaces. La fixture `isolated_asset_session` se agregará dentro del archivo de tests. Los comandos siguientes son únicamente para otra copia donde falte alguno de los dos archivos; ejecutalos desde la raíz.
 
 ### Windows — PowerShell
 
 ```powershell
-New-Item -ItemType File -Path app/modules/inventory/get_asset/router.py
-New-Item -ItemType File -Path tests/modules/inventory/test_get_asset_endpoint.py
+if (-not (Test-Path app/modules/inventory/get_asset/router.py)) {
+    New-Item -ItemType File -Path app/modules/inventory/get_asset/router.py
+}
+if (-not (Test-Path tests/modules/inventory/test_get_asset_endpoint.py)) {
+    New-Item -ItemType File -Path tests/modules/inventory/test_get_asset_endpoint.py
+}
 ```
 
-`New-Item` se usa sin `-Force` para no reemplazar archivos existentes. Si alguno ya existe en tu copia, no ejecutes su comando: editá el archivo existente.
+`New-Item` se usa sin `-Force` y solo si falta el archivo. Si ya existe en tu copia, editá el existente.
 
 ### macOS o Linux — Terminal
 
 ```bash
-touch app/modules/inventory/get_asset/router.py
-touch tests/modules/inventory/test_get_asset_endpoint.py
+if [ ! -e app/modules/inventory/get_asset/router.py ]; then touch app/modules/inventory/get_asset/router.py; fi
+if [ ! -e tests/modules/inventory/test_get_asset_endpoint.py ]; then touch tests/modules/inventory/test_get_asset_endpoint.py; fi
 ```
 
-`touch` crea los archivos si no existen y conserva su contenido si ya existen. Si alguno ya está creado, podés continuar editándolo sin volver a ejecutar el comando correspondiente.
+`touch` se ejecuta solo cuando falta el archivo; no se altera un archivo preexistente.
 
 ## Reutilización y datos de prueba
 
@@ -216,6 +220,268 @@ En `tests/modules/inventory/test_get_asset_endpoint.py`, agregá los casos de la
 - Ejecutá los comandos de la sección [Comandos de prueba](#comandos-de-prueba) para tu sistema operativo.
 - Confirmá que pasan tanto los tests de Task 06 como la suite existente.
 - Revisá el diff: la implementación debe limitarse a los archivos previstos en esta tarea y a la fixture de tests necesaria para el aislamiento.
+
+Antes de ejecutar la verificación, compará la implementación con los ejemplos completos de abajo. Son **contenido para editar en los archivos existentes**, no comandos para reemplazarlos automáticamente.
+
+## Código de referencia por archivo
+
+### `app/modules/inventory/get_asset/router.py`
+
+El `select` aplica el orden en SQL. `session.get()` busca por clave primaria. La conversión explícita reutiliza el esquema público sin exponer nombres internos del ORM:
+
+```python
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.infrastructure.database.session import get_database_session
+from app.modules.inventory.register_asset.schemas import RegisterAssetResponse
+from app.modules.inventory.shared.models import Asset
+
+router = APIRouter(prefix="/inventory/assets", tags=["Inventory"])
+DatabaseSession = Annotated[AsyncSession, Depends(get_database_session)]
+
+
+def asset_response(asset: Asset) -> RegisterAssetResponse:
+    return RegisterAssetResponse(
+        id=asset.id,
+        internal_code=asset.codigo_interno,
+        name=asset.nombre,
+        category_id=asset.categoria_id,
+    )
+
+
+@router.get("/", response_model=list[RegisterAssetResponse])
+async def list_assets(session: DatabaseSession) -> list[RegisterAssetResponse]:
+    result = await session.execute(select(Asset).order_by(Asset.id))
+    return [asset_response(asset) for asset in result.scalars().all()]
+
+
+@router.get("/{asset_id}", response_model=RegisterAssetResponse)
+async def get_asset(
+    asset_id: int, session: DatabaseSession
+) -> RegisterAssetResponse:
+    asset = await session.get(Asset, asset_id)
+    if asset is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Asset not found.",
+        )
+    return asset_response(asset)
+```
+
+### `app/main.py`
+
+Agregá estas dos líneas en sus posiciones correspondientes; conservá los imports, manejadores de errores, rutas de registro, raíz y health existentes:
+
+```python
+from app.modules.inventory.get_asset.router import router as get_asset_router
+
+# Junto a los app.include_router(...) existentes:
+app.include_router(get_asset_router)
+```
+
+### `tests/modules/inventory/test_get_asset_endpoint.py`
+
+Usá una fixture `pytest_asyncio.fixture` (el proyecto ya usa pytest-asyncio) para abrir una transacción externa por test. El guard comprueba la base **antes de escribir**; el `finally` revierte aun si falla la preparación o una aserción. `session.commit()` confirma el SAVEPOINT, no la transacción externa. `expire_on_commit=False` permite seguir usando el ID de la categoría después del commit.
+
+```python
+from collections.abc import AsyncIterator
+from uuid import uuid4
+
+import pytest
+import pytest_asyncio
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy import delete, select, text
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.infrastructure.database.session import engine, get_database_session
+from app.main import app
+from app.modules.inventory.shared.models import Asset, Category
+
+
+_MISSING = object()
+
+
+@pytest_asyncio.fixture
+async def isolated_asset_session() -> AsyncIterator[AsyncSession]:
+    async with engine.connect() as connection:
+        outer_transaction = await connection.begin()
+        try:
+            database_name = await connection.scalar(text("SELECT current_database()"))
+            if database_name != "fireassets_test":
+                raise RuntimeError("Task 06 tests require fireassets_test")
+
+            async with AsyncSession(
+                bind=connection,
+                join_transaction_mode="create_savepoint",
+                expire_on_commit=False,
+            ) as session:
+                await session.execute(delete(Asset))
+                await session.commit()  # Solo confirma el SAVEPOINT.
+
+                previous = app.dependency_overrides.get(get_database_session, _MISSING)
+
+                async def override_database_session() -> AsyncIterator[AsyncSession]:
+                    yield session
+
+                app.dependency_overrides[get_database_session] = override_database_session
+                try:
+                    yield session
+                finally:
+                    if previous is _MISSING:
+                        app.dependency_overrides.pop(get_database_session, None)
+                    else:
+                        app.dependency_overrides[get_database_session] = previous
+        finally:
+            if outer_transaction.is_active:
+                await outer_transaction.rollback()
+
+
+async def create_category(session: AsyncSession, kind: str) -> Category:
+    category = Category(nombre=f"{kind}-{uuid4().hex}")
+    session.add(category)
+    await session.commit()
+    await session.refresh(category)
+    return category
+
+
+async def create_asset(
+    client: AsyncClient, category_id: int, name: str
+) -> dict[str, object]:
+    response = await client.post(
+        "/inventory/assets",
+        json={
+            "internal_code": f"TEST-{uuid4().hex[:20]}",
+            "name": name,
+            "category_id": category_id,
+        },
+    )
+    assert response.status_code == 201
+    return response.json()
+
+
+@pytest.mark.asyncio
+async def test_list_assets_empty(isolated_asset_session: AsyncSession) -> None:
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/inventory/assets/")
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+@pytest.mark.asyncio
+async def test_list_assets_ordered(isolated_asset_session: AsyncSession) -> None:
+    hose_category = await create_category(isolated_asset_session, "Mangueras")
+    helmet_category = await create_category(isolated_asset_session, "Cascos")
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        hose = await create_asset(client, hose_category.id, "Manguera de prueba")
+        helmet = await create_asset(client, helmet_category.id, "Casco de prueba")
+        response = await client.get("/inventory/assets/")
+
+    assert response.status_code == 200
+    items = response.json()
+    assert len(items) == 2
+    assert [item["id"] for item in items] == sorted([hose["id"], helmet["id"]])
+    assert {item["id"] for item in items} == {hose["id"], helmet["id"]}
+    assert all(set(item) == {"id", "internal_code", "name", "category_id"} for item in items)
+    assert {item["category_id"] for item in items} == {
+        hose_category.id, helmet_category.id
+    }
+
+
+@pytest.mark.asyncio
+async def test_get_asset_existing(isolated_asset_session: AsyncSession) -> None:
+    category = await create_category(isolated_asset_session, "Mangueras")
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        created = await create_asset(client, category.id, "Manguera de prueba")
+        response = await client.get(f"/inventory/assets/{created['id']}")
+
+    assert response.status_code == 200
+    assert response.json() == created
+    assert set(response.json()) == {"id", "internal_code", "name", "category_id"}
+
+
+@pytest.mark.asyncio
+async def test_get_asset_missing(isolated_asset_session: AsyncSession) -> None:
+    category = await create_category(isolated_asset_session, "Cascos")
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        created = await create_asset(client, category.id, "Casco de prueba")
+        missing_id = int(created["id"]) + 1
+        assert await isolated_asset_session.scalar(
+            select(Asset.id).where(Asset.id == missing_id)
+        ) is None
+        response = await client.get(f"/inventory/assets/{missing_id}")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Asset not found."}
+
+
+@pytest.mark.asyncio
+async def test_get_asset_invalid_id(isolated_asset_session: AsyncSession) -> None:
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/inventory/assets/not-an-id")
+
+    assert response.status_code == 422
+```
+
+Cada test prepara y revierte su propio estado; la prueba de lista vacía no depende de que otra haya corrido antes. Los IDs de categorías y activos siempre proceden de filas creadas en el propio test. Las llamadas a la API y a la sesión son secuenciales, porque `AsyncSession` no admite uso concurrente. Referencia: [SQLAlchemy — Joining a Session into an External Transaction](https://docs.sqlalchemy.org/en/20/orm/session_transaction.html#joining-a-session-into-an-external-transaction-such-as-for-test-suites).
+
+## Ejemplos de uso manual en `/docs`
+
+Estos son **resultados esperados una vez implementada la Tarea 06**; los GET de activos todavía no están activos. Desde la raíz del proyecto, inicie la aplicación con `./scripts/test-up.sh` (macOS/Linux) o `.\scripts\test-up.ps1` (Windows PowerShell) y abra `http://localhost:8000/docs`. Los GET no llevan request body. Los números de ID siguientes son **ilustrativos**: utilice siempre los IDs reales devueltos por los POST.
+
+### 1. Preparar categorías y bienes
+
+En `/docs`, ejecute `POST /inventory/categories` dos veces, con los cuerpos `{"name":"Mangueras"}` y `{"name":"Cascos"}`. Si alguna categoría ya existe y el POST devuelve `409`, consulte `GET /inventory/categories` y tome su ID de la respuesta. Por ejemplo, podrían obtenerse los IDs de categoría `7` y `8`.
+
+Luego ejecute `POST /inventory/assets` dos veces. Sustituya `category_id` por el ID real de la categoría correspondiente y utilice códigos internos que todavía no existan:
+
+```json
+{"internal_code":"MANG-001","name":"Manguera de 20 m","category_id":7}
+```
+
+```json
+{"internal_code":"CASC-001","name":"Casco de protección","category_id":8}
+```
+
+Cada POST debe responder `201` con `id`, `internal_code`, `name` y `category_id`. Anote los IDs de los bienes devueltos (por ejemplo, `21` y `22`): se usan en las consultas siguientes. Si un código ya existe, elija otro; no se requiere asumir que la base estaba vacía.
+
+### 2. Listar bienes: `GET /inventory/assets/`
+
+En `/docs`, abra la operación GET de la colección y pulse **Try it out → Execute**, sin enviar cuerpo. Respuesta `200 OK` de ejemplo, ordenada por `id` ascendente (pueden aparecer también otros bienes existentes):
+
+```json
+[
+  {"id":21,"internal_code":"MANG-001","name":"Manguera de 20 m","category_id":7},
+  {"id":22,"internal_code":"CASC-001","name":"Casco de protección","category_id":8}
+]
+```
+
+Si no hay **ningún** bien en la base consultada, la respuesta esperada es `200 OK` con `[]`. En la prueba automatizada, la fixture garantiza ese estado; en `/docs` no se debe suponer que `fireassets_test` esté vacía.
+
+### 3. Consultar un bien: `GET /inventory/assets/{asset_id}`
+
+Escriba el `id` real devuelto por uno de los POST en el parámetro `asset_id` y pulse **Execute**. Para el ID ilustrativo `21`, la respuesta esperada es `200 OK`:
+
+```json
+{"id":21,"internal_code":"MANG-001","name":"Manguera de 20 m","category_id":7}
+```
+
+Para comprobar el error, utilice un ID entero cuya inexistencia haya verificado (no suponga que un número arbitrario está libre). La respuesta esperada es `404 Not Found`:
+
+```json
+{"detail":"Asset not found."}
+```
+
+Opcionalmente, envíe `not-an-id` como `asset_id`: FastAPI debe responder `422 Unprocessable Entity` porque el parámetro requerido es un entero. El cuerpo de validación lo genera FastAPI y puede variar según su versión.
 
 ## Comandos de prueba
 
