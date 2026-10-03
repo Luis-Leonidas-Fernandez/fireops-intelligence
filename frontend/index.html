@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Panel de demostración de inventario para Fire Control Bomberos.">
+  <title>Fire Control — Inventario general</title>
+  <link rel="stylesheet" href="css/tokens.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/layout.css">
+  <script src="js/data.js" defer></script>
+  <script src="js/render.js" defer></script>
+  <script src="js/app.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Saltar al contenido del inventario</a>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Navegación principal">
+      <a class="brand" href="#main-content" aria-label="Fire Control Bomberos, inventario general">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="var(--violet-bright)" xmlns="http://www.w3.org/2000/svg">
+            <path d="M8.5 14.5A6 6 0 0 1 11 3c0 2.5 2 4.5 4 6 1.5 1.1 2.5 3 2.5 5.5a6 6 0 0 1-12 0c0-1.5.5-3.5 3-6 0 2.5 0 4 0 6Z"/>
+          </svg>
+        </span>
+        <span class="brand-name"><span>Fire</span><span>Control</span><span>BOMBEROS</span></span>
+      </a>
+
+      <nav class="primary-nav" aria-label="Secciones del inventario">
+        <p class="nav-label">Inventario</p>
+        <button class="nav-item is-active" type="button" data-view="Inventario general" aria-current="page">
+          <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></span><span>Inventario general</span>
+        </button>
+        <button class="nav-item" type="button" data-view="Bienes">
+          <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m4 7 8-4 8 4-8 4-8-4Z"/><path d="m4 7 8 4 8-4v10l-8 4-8-4V7Z"/><path d="M12 11v10"/></svg></span><span>Bienes</span>
+        </button>
+        <button class="nav-item" type="button" data-view="Categorías">
+          <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13 13 20l-9-9V4h7l9 9Z"/><circle cx="8.5" cy="8.5" r="1"/></svg></span><span>Categorías</span>
+        </button>
+        <button class="nav-item" type="button" data-view="Ubicaciones">
+          <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></svg></span><span>Ubicaciones</span>
+        </button>
+        <button class="nav-item" type="button" data-view="Vehículos">
+          <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h11v10H3z"/><path d="M14 10h4l3 3v4h-7z"/><circle cx="7" cy="18" r="2"/><circle cx="18" cy="18" r="2"/></svg></span><span>Vehículos</span>
+        </button>
+
+        <p class="nav-label">Gestión</p>
+        <button class="nav-item" type="button" data-view="Responsables">
+          <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0"/><circle cx="17" cy="9" r="2.5"/><path d="M15.5 15.5a4.5 4.5 0 0 1 5 4.5"/></svg></span><span>Responsables</span>
+        </button>
+        <button class="nav-item" type="button" data-view="Movimientos">
+          <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h15"/><path d="m15 3 4 4-4 4"/><path d="M20 17H5"/><path d="m9 13-4 4 4 4"/></svg></span><span>Movimientos</span>
+        </button>
+        <button class="nav-item" type="button" data-view="Auditoría">
+          <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5h6"/><path d="M9 3h6v4H9z"/><path d="M7 5H5v16h14V5h-2"/><path d="m8 14 2.5 2.5L16 11"/></svg></span><span>Auditoría</span>
+        </button>
+        <button class="nav-item" type="button" data-view="Reportes">
+          <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10"/><path d="M10 20V4"/><path d="M16 20v-7"/><path d="M22 20H2"/></svg></span><span>Reportes</span>
+        </button>
+      </nav>
+
+      <section class="upgrade-card" aria-label="Aviso sobre los datos">
+        <span class="upgrade-icon" aria-hidden="true">↗</span>
+        <strong>Datos de demostración</strong>
+        <p>Las cifras ilustrativas están separadas del conteo de categorías en vivo.</p>
+        <button type="button" data-view="Alertas">Ver alertas</button>
+      </section>
+      <button class="logout-button" type="button"><span aria-hidden="true">↪</span> Cerrar sesión</button>
+    </aside>
+
+    <div class="workspace">
+      <header class="topbar">
+        <button class="mobile-menu" type="button" aria-label="Abrir navegación" aria-expanded="false" aria-controls="mobile-nav">☰</button>
+        <form class="global-search" role="search">
+          <label class="sr-only" for="global-search">Buscar en el inventario</label>
+          <span aria-hidden="true">⌕</span>
+          <input id="global-search" type="search" placeholder="Buscar bien, código o movimiento" autocomplete="off">
+          <kbd>⌘ K</kbd>
+        </form>
+        <div class="topbar-actions">
+          <button class="icon-button" type="button" aria-label="Alternar brillo reducido" id="brightness-toggle">☼</button>
+          <button class="icon-button notification-button" type="button" aria-label="Notificaciones">♢<span></span></button>
+          <span class="topbar-divider" aria-hidden="true"></span>
+          <button class="profile-button" type="button" aria-label="Abrir menú de perfil">
+            <span class="avatar" aria-hidden="true">LA</span>
+            <span class="profile-copy"><strong>Luis Admin</strong><small>Administrador de inventario</small></span>
+            <span aria-hidden="true">⌄</span>
+          </button>
+        </div>
+      </header>
+
+      <nav class="mobile-nav" id="mobile-nav" aria-label="Navegación móvil" hidden>
+        <button class="is-active" type="button" data-view="Inventario general">Inventario general</button>
+        <button type="button" data-view="Bienes">Bienes</button>
+        <button type="button" data-view="Movimientos">Movimientos</button>
+        <button type="button" data-view="Alertas">Alertas</button>
+      </nav>
+
+      <main id="main-content" tabindex="-1">
+        <section class="page-heading" aria-labelledby="page-title">
+          <div>
+            <p class="eyebrow">BOMBEROS</p>
+            <h1 id="page-title">Inventario general</h1>
+            <p id="page-subtitle">Vista operativa de bienes, estados y movimientos del inventario.</p>
+          </div>
+          <div class="heading-actions">
+            <label class="date-control">
+              <span aria-hidden="true">□</span>
+              <span class="sr-only">Período de referencia</span>
+              <select id="date-range">
+                <option value="30">Últimos 30 días</option>
+                <option value="90" selected>Últimos 90 días</option>
+                <option value="180">Últimos 6 meses</option>
+              </select>
+            </label>
+            <button class="export-button" id="export-button" type="button"><span aria-hidden="true">⇩</span> Exportar CSV</button>
+          </div>
+        </section>
+
+        <section class="kpi-grid" id="kpi-grid" aria-label="Indicadores de inventario con datos de demostración"></section>
+
+        <section class="dashboard-grid" aria-label="Detalle del inventario">
+          <article class="panel analytics-panel">
+            <header class="panel-header">
+              <div><p class="panel-kicker">Datos de demostración</p><h2>Bienes por categoría</h2></div>
+              <div class="legend" aria-label="Referencias del gráfico">
+                <span><i class="violet"></i>En servicio</span><span><i class="orange"></i>En mantenimiento</span><span><i class="yellow"></i>Bajas</span>
+              </div>
+            </header>
+            <div class="chart-summary" id="chart-summary"></div>
+            <div class="bar-chart-wrap">
+              <div class="chart-y-axis" aria-hidden="true"><span>320</span><span>200</span><span>100</span><span>0</span></div>
+              <div class="bar-chart" id="bar-chart" role="img" aria-label="Gráfico apilado de bienes por categoría con datos de demostración"></div>
+            </div>
+          </article>
+
+          <article class="panel channels-panel">
+            <header class="panel-header"><div><p class="panel-kicker">Datos de demostración</p><h2>Estado del inventario</h2></div><button class="more-button" aria-label="Más opciones de estado" type="button">•••</button></header>
+            <div class="channel-totals" id="channel-totals"></div>
+            <div class="signal-strip" id="signal-strip" aria-hidden="true"></div>
+            <div class="channel-list-header" aria-hidden="true"><span>Estado</span><span>Proporción</span><span>Total</span></div>
+            <ul class="channel-list" id="channel-list"></ul>
+          </article>
+
+          <article class="panel countries-panel">
+            <header class="panel-header panel-header-search">
+              <div><p class="panel-kicker">Datos de demostración</p><h2>Movimientos recientes</h2></div>
+              <label class="table-search"><span aria-hidden="true">⌕</span><span class="sr-only">Filtrar movimientos</span><input id="country-search" type="search" placeholder="Filtrar"></label>
+            </header>
+            <div class="table-tabs" role="tablist" aria-label="Tipo de movimiento">
+              <button class="is-active" type="button" role="tab" aria-selected="true">Todos</button>
+              <button type="button" role="tab" aria-selected="false">Ingresos</button>
+              <button type="button" role="tab" aria-selected="false">Salidas</button>
+            </div>
+            <div class="table-scroll">
+              <table>
+                <thead><tr><th scope="col">Bien</th><th scope="col">Movimiento</th><th scope="col">Cantidad</th><th scope="col"><span class="sr-only">Actividad reciente</span></th></tr></thead>
+                <tbody id="country-table-body"></tbody>
+              </table>
+            </div>
+          </article>
+
+          <article class="panel map-panel">
+            <header class="panel-header"><div><p class="panel-kicker">Datos de demostración</p><h2>Alertas <span class="count-badge">7</span></h2></div><button class="more-button" aria-label="Más opciones de alertas" type="button">•••</button></header>
+            <div class="map-stage" role="img" aria-label="Resumen visual ilustrativo de alertas por ubicación operativa">
+              <svg viewBox="0 0 800 360" aria-hidden="true" focusable="false">
+                <defs><linearGradient id="mapGradient" x1="0" x2="1"><stop stop-color="#f48220"/><stop offset=".42" stop-color="#8e59ff"/><stop offset="1" stop-color="#6235c9"/></linearGradient></defs>
+                <g class="map-grid"><path d="M0 90H800M0 180H800M0 270H800M200 0V360M400 0V360M600 0V360"/></g>
+                <g fill="url(#mapGradient)">
+                  <path d="M74 82l38-29 74-6 48 18 34 35-16 30-46 9-18 27-38-11-25-32-42-10z"/>
+                  <path d="M203 166l44 19 26 47-10 58-25 40-25-21 4-42-25-37-8-39z"/>
+                  <path d="M342 75l32-19 37 8 19 20 36-4 27 18-12 17-39 7-11 18-31-2-13-22-38-13z"/>
+                  <path d="M392 141l48 4 28 35-9 55-26 65-31-17-9-50-27-47z"/>
+                  <path d="M475 93l48-34 69 10 53 24 79 4 29 30-31 19-53-9-32 22-58-6-29-22-51 12-26-23z"/>
+                  <path d="M653 230l47-20 49 13 19 35-29 25-55-5-31-25z"/>
+                </g>
+                <g class="map-points"><circle cx="146" cy="102" r="5"/><circle cx="231" cy="218" r="5"/><circle cx="401" cy="104" r="5"/><circle cx="575" cy="116" r="5"/><circle cx="705" cy="247" r="5"/></g>
+              </svg>
+              <div class="map-callout"><span></span><div><small>Alerta prioritaria</small><strong>Revisión próxima · 7 bienes</strong></div></div>
+            </div>
+          </article>
+        </section>
+        <p class="data-note">Datos de demostración · Registros ilustrativos · Sin estadísticas reales del backend</p>
+        <p class="api-status" id="api-status" role="status" aria-live="polite">Fire Control API · Verificando categorías en vivo…</p>
+      </main>
+    </div>
+  </div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
