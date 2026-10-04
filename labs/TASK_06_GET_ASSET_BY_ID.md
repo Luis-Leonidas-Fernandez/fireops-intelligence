@@ -2,6 +2,67 @@
 
 Esta guía define el alcance de implementación y verificación de la Tarea 06; no implementa los endpoints. El repositorio ya permite registrar activos y consultar categorías, pero todavía no cuenta con rutas GET para activos. Los archivos propuestos para el router de lectura y sus tests ya existen vacíos y sin seguimiento de Git: editarlos, no recrearlos.
 
+## Después de `git pull`: configuración local de cada integrante
+
+`.env` y `.env.test` están ignorados por Git: **no llegan con `git pull`**. Cada integrante debe crearlos en la raíz del repositorio a partir de `.env.example`, sin sobrescribir archivos locales que ya existan. Ejecute los siguientes comandos desde la raíz del proyecto. Si aún no existe `.venv`, prepare primero el entorno según [macOS](../docs/getting-started/macos.md) o [Windows](../docs/getting-started/windows.md).
+
+**macOS — Terminal:**
+
+```bash
+source .venv/bin/activate
+test -e .env || cp .env.example .env
+test -e .env.test || cp .env.example .env.test
+```
+
+**Windows — PowerShell:**
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
+if (-not (Test-Path .env.test)) { Copy-Item .env.example .env.test }
+```
+
+En **ambos sistemas**, ejecute desde la raíz este comando con el `python` del entorno virtual. Genera una clave criptográficamente aleatoria para cada archivo que todavía tenga el valor de ejemplo. Si ambos archivos ya contenían la misma clave, renueva únicamente la de `.env.test`. No imprime las claves:
+
+```text
+python -c 'from pathlib import Path
+import secrets
+placeholder = "SECRET_KEY=replace-with-a-random-secret-of-at-least-32-characters"
+for name in (".env", ".env.test"):
+    path = Path(name)
+    content = path.read_text(encoding="utf-8")
+    if placeholder in content:
+        path.write_text(content.replace(placeholder, "SECRET_KEY=" + secrets.token_urlsafe(48)), encoding="utf-8")
+def key(name):
+    return next((line.split("=", 1)[1] for line in Path(name).read_text(encoding="utf-8").splitlines() if line.startswith("SECRET_KEY=")), None)
+if key(".env") is not None and key(".env") == key(".env.test"):
+    path = Path(".env.test")
+    content = path.read_text(encoding="utf-8")
+    path.write_text(content.replace("SECRET_KEY=" + key(".env.test"), "SECRET_KEY=" + secrets.token_urlsafe(48), 1), encoding="utf-8")'
+```
+
+El comando conserva las claves locales válidas salvo cuando son idénticas entre ambos archivos. No copie ni publique las claves.
+
+Edite `DATABASE_URL` en **cada archivo** con sus credenciales locales de PostgreSQL y el driver `postgresql+asyncpg`: `.env` debe apuntar a `fireassets` y `.env.test` a `fireassets_test`. Por ejemplo, la forma es `postgresql+asyncpg://USUARIO:CONTRASEÑA@localhost:5432/NOMBRE_BASE`; reemplace los marcadores y no comparta ni confirme esos archivos. La base `fireassets_test` debe existir antes de ejecutar las pruebas.
+
+Compruebe la configuración **sin mostrar las claves** (mismo comando en Terminal o PowerShell):
+
+```text
+python -c 'from pathlib import Path
+from urllib.parse import urlsplit
+def values(name):
+    return dict(line.split("=", 1) for line in Path(name).read_text(encoding="utf-8").splitlines() if "=" in line)
+dev, test = values(".env"), values(".env.test")
+assert all(len(item["SECRET_KEY"]) >= 32 for item in (dev, test))
+assert dev["SECRET_KEY"] != test["SECRET_KEY"]
+assert urlsplit(dev["DATABASE_URL"]).scheme == urlsplit(test["DATABASE_URL"]).scheme == "postgresql+asyncpg"
+assert urlsplit(dev["DATABASE_URL"]).path == "/fireassets"
+assert urlsplit(test["DATABASE_URL"]).path == "/fireassets_test"
+print("Archivos y claves verificados; no se mostraron secretos.")'
+```
+
+`Settings` exige `SECRET_KEY` de al menos 32 caracteres; el servidor lee `.env` por defecto y los scripts de prueba seleccionan `.env.test`. Esta clave firma el token JWT guardado en la cookie: cambiarla invalida los tokens anteriores de ese entorno. El token y la cookie vencen a los **30 minutos**; `POST /auth/logout` elimina la cookie. Hoy el inicio de sesión protege la página `/`, **no** los endpoints de inventario. Esta preparación de autenticación no modifica el alcance de los GET de la Tarea 06.
+
 ## Objetivo
 
 Implementar y probar únicamente estos dos endpoints de lectura: listar todos los activos y consultar un activo por su ID. Reutilizar los esquemas de respuesta y la dependencia de base de datos existentes. Cada prueba debe preparar su propio estado y no depender del orden de ejecución, de filas preexistentes ni de identificadores fijos.
