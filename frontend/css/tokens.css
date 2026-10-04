@@ -12,14 +12,14 @@
   --faint: #66626f;
   --border: #252329;
   --border-strong: #34303a;
-  --violet: #8b4cf7;
-  --violet-bright: #a46aff;
-  --violet-deep: #5522b8;
+  --primary: #E53935;
+  --primary-hover: #F04440;
+  --primary-pressed: #C62828;
   --orange: #ef741d;
   --yellow: #f6c548;
   --green: #57cf8c;
   --red: #ff6b70;
-  --focus: #c6a4ff;
+  --focus: var(--primary-hover);
   --font-sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-mono: ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   --space-1: .25rem;
@@ -45,7 +45,7 @@ button, input, select { font: inherit; }
 button, select { cursor: pointer; }
 button { color: inherit; }
 a { color: inherit; }
-::selection { background: var(--violet); color: white; }
+::selection { background: var(--primary); color: white; }
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 .skip-link { position: fixed; z-index: 100; top: .75rem; left: .75rem; transform: translateY(-160%); background: var(--text); color: #111; padding: .7rem 1rem; border-radius: .5rem; text-decoration: none; font-weight: 700; }

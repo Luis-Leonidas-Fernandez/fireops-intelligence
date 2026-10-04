@@ -1,282 +1,42 @@
-# Starter — levantar el proyecto y la base de datos
+# Starter — iniciar Fire Control con la base de prueba
 
-Esta guía sirve para arrancar el proyecto localmente sin tener que recordar todos los comandos.
-
-## Arranque rápido con la base de pruebas
-
-Desde la raíz del proyecto, ejecutá el comando de tu sistema:
-
-**macOS:**
+La forma corta de levantar API y web **en un solo servidor** es:
 
 ```bash
+# macOS / Linux, desde la raíz del repositorio
 ./scripts/test-up.sh
 ```
 
-**Windows — PowerShell:**
-
 ```powershell
+# Windows PowerShell, desde la raíz del repositorio
 .\scripts\test-up.ps1
 ```
 
-El script usa el Python de `.venv` (no hace falta activarlo manualmente), carga `.env.test` y levanta la API con `fireassets_test`. Verifica la base configurada antes de iniciar y se detiene si no es `fireassets_test`. Para detener la API, presioná `Ctrl+C`.
+Los scripts usan el Python de `.venv` sin activación manual, seleccionan `.env.test`, comprueban que `DATABASE_URL` apunte a `fireassets_test` e inician Uvicorn en `127.0.0.1:8000`. Detené el servidor con `Ctrl+C`. **No** instalan dependencias, inician PostgreSQL, crean la base ni aplican migraciones.
 
-Requisitos: PostgreSQL debe estar iniciado, y en la raíz deben existir `.env.test` y `.venv` con las dependencias instaladas. El script no crea la base de datos ni instala dependencias.
+## Antes del primer arranque
 
-Para que tus compañeros tengan los scripts después de hacer `git pull`, incluílos en el commit y subilo a GitHub. Cada participante debe configurar su propio `.env.test` y `.venv`.
+1. Instalá Python, PostgreSQL y las dependencias en `.venv`.
+2. Creá la base local `fireassets_test` si no existe. Git no transporta bases de datos.
+3. Creá `.env.test` con `DATABASE_URL` terminado en `/fireassets_test`. No lo subas a Git.
+4. Aplicá la migración `0374d9a573a1` a esa base.
 
-> Importante: el proyecto **no levanta PostgreSQL automáticamente**. Primero debe estar corriendo PostgreSQL y después se levanta la API con FastAPI/Uvicorn.
+Seguí la guía completa para [macOS](docs/getting-started/macos.md) o [Windows](docs/getting-started/windows.md) para los comandos de primera instalación.
 
----
+## URLs que vas a encontrar
 
-## 1. Ubicarse en la raíz del proyecto
-
-### macOS / Linux
-
-```bash
-cd /Users/luis/Desktop/fire-control
-```
-
-### Windows / PowerShell
-
-Entrar a la carpeta donde clonaste el proyecto. Ejemplo:
-
-```powershell
-cd "D:\Proyectos\fireops-intelligence"
-```
-
-Si tu carpeta tiene otro nombre, usá tu ruta real.
-
----
-
-## 2. Activar el entorno virtual
-
-### macOS / Linux
-
-```bash
-source .venv/bin/activate
-```
-
-### Windows / PowerShell
-
-```powershell
-.\.venv\Scripts\Activate.ps1
-```
-
-Si PowerShell bloquea la activación, ejecutar una vez:
-
-```powershell
-Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
-```
-
-Después cerrar y abrir la terminal, y volver a probar:
-
-```powershell
-.\.venv\Scripts\Activate.ps1
-```
-
-Cuando el entorno está activo, deberías ver algo parecido a:
-
-```text
-(.venv)
-```
-
----
-
-## 3. Instalar dependencias
-
-Con el entorno virtual activo:
-
-```bash
-python -m pip install -r requirements.txt
-```
-
-Este comando instala FastAPI, Uvicorn, SQLAlchemy, asyncpg, Alembic, pytest y otras herramientas del proyecto.
-
----
-
-## 4. Verificar que PostgreSQL esté corriendo
-
-### macOS con Homebrew
-
-Ver servicios:
-
-```bash
-brew services list
-```
-
-Si PostgreSQL no está iniciado:
-
-```bash
-brew services start postgresql@18
-```
-
-Verificar conexión:
-
-```bash
-psql fireassets
-```
-
-Si entrás a PostgreSQL, salí con:
-
-```sql
-\q
-```
-
-### Windows
-
-Primero verificar que `psql` responda:
-
-```powershell
-psql --version
-```
-
-Después probar conexión:
-
-```powershell
-psql -U postgres -d fireassets
-```
-
-PostgreSQL va a pedir la contraseña que se configuró durante la instalación.
-
-Si entrás a PostgreSQL, salí con:
-
-```sql
-\q
-```
-
-> Si `psql` no se reconoce como comando, falta agregar la carpeta `bin` de PostgreSQL al `Path` de Windows.
-
----
-
-## 5. Verificar archivo `.env`
-
-En la raíz del proyecto debe existir un archivo llamado:
-
-```text
-.env
-```
-
-Ejemplo para macOS cuando el usuario local se conecta sin contraseña:
-
-```env
-DATABASE_URL=postgresql+asyncpg://luis@localhost:5432/fireassets
-SECRET_KEY=dev-secret-key
-ENVIRONMENT=development
-```
-
-Ejemplo para Windows con usuario `postgres` y contraseña:
-
-```env
-DATABASE_URL=postgresql+asyncpg://postgres:TU_PASSWORD@localhost:5432/fireassets
-SECRET_KEY=dev-secret-key
-ENVIRONMENT=development
-```
-
-Reemplazar `TU_PASSWORD` por la contraseña real de PostgreSQL.
-
----
-
-## 6. Verificar que existan las tablas
-
-Entrar a PostgreSQL:
-
-### macOS
-
-```bash
-psql fireassets
-```
-
-### Windows
-
-```powershell
-psql -U postgres -d fireassets
-```
-
-Dentro de PostgreSQL, listar tablas:
-
-```sql
-\dt
-```
-
-Deberían existir al menos:
-
-```text
-categorias
-bienes
-```
-
-Salir:
-
-```sql
-\q
-```
-
----
-
-## 7. Levantar la API
-
-Con PostgreSQL corriendo y el entorno virtual activo:
-
-```bash
-python -m uvicorn app.main:app --reload
-```
-
-Si todo está bien, la terminal debería mostrar que Uvicorn está corriendo en:
-
-```text
-http://127.0.0.1:8000
-```
-
----
-
-## 8. URLs útiles
-
-Con la API levantada, abrir en el navegador:
-
-| URL | Para qué sirve |
+| URL | Qué muestra hoy |
 |---|---|
-| `http://127.0.0.1:8000/` | Verifica que la API responde |
-| `http://127.0.0.1:8000/health` | Verifica salud básica del servicio |
-| `http://127.0.0.1:8000/docs` | Abre Swagger UI para probar endpoints |
+| `http://127.0.0.1:8000/` | Dashboard de demostración; es el enlace que ofrece Uvicorn |
+| `http://127.0.0.1:8000/iniciar-sesion` | Página visual de inicio de sesión |
+| `http://127.0.0.1:8000/registro` | Página visual de registro |
+| `http://127.0.0.1:8000/docs` | Swagger UI con endpoints implementados |
+| `http://127.0.0.1:8000/health` | Respuesta `{"status":"ok"}` |
 
-Cuando la Task 03 esté implementada, también debería aparecer:
+**Importante:** todavía no hay autenticación. Los formularios y el icono de Google navegan al dashboard sin validar credenciales; «Cerrar sesión» vuelve a `/iniciar-sesion` sin destruir ninguna sesión. `/` se puede abrir directamente. El cambio para abrir la pantalla de inicio al hacer clic en el enlace de Uvicorn sigue pendiente.
 
-```text
-POST /inventory/assets
-```
+## Endpoints disponibles y próximo trabajo
 
----
+Swagger debe mostrar `POST /inventory/categories`, `GET /inventory/categories` y `POST /inventory/assets`. El listado y la consulta individual de bienes son parte de la [Task 06](labs/TASK_06_GET_ASSET_BY_ID.md) y **aún no están implementados**.
 
-## 9. Apagar la API
-
-En la terminal donde corre Uvicorn, presionar:
-
-```text
-CTRL + C
-```
-
-Eso baja la API.
-
----
-
-## 10. Desactivar el entorno virtual
-
-```bash
-deactivate
-```
-
-Funciona tanto en macOS/Linux como en Windows cuando el entorno está activo.
-
----
-
-## Checklist rápido para empezar a trabajar
-
-- [ ] Estoy en la raíz del proyecto.
-- [ ] Activé `.venv`.
-- [ ] Instalé dependencias.
-- [ ] PostgreSQL está corriendo.
-- [ ] El archivo `.env` existe.
-- [ ] `DATABASE_URL` apunta a `fireassets`.
-- [ ] Las tablas `categorias` y `bienes` existen.
-- [ ] Levanté la API con `python -m uvicorn app.main:app --reload`.
-- [ ] Abrí `http://127.0.0.1:8000/docs`.
+El dashboard muestra cifras ficticias. Solo consulta salud de la API y cantidad de categorías desde PostgreSQL. Para más detalles, leé [README](README.md), [frontend](frontend/README.md) y [progreso](docs/PROGRESS.md).

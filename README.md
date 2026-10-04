@@ -1,539 +1,91 @@
-<p align="center">
-  <img src="asset/profile.png" alt="FireOps Intelligence banner" width="100%">
-</p>
-
 # FireOps Intelligence
 
-**FireOps Intelligence** is a modular platform for fire departments, designed to manage assets, improve operational traceability, and support future data science and artificial intelligence capabilities.
+FireOps Intelligence is a learning project for a fire-department inventory API. **Fire Control** is the name shown by its current web demo. The backend uses FastAPI, SQLAlchemy and PostgreSQL; FastAPI also serves a small HTML/CSS/JavaScript interface.
 
-The project starts with a solid inventory-management foundation and is designed to evolve toward operational analytics, predictive insights, intelligent reporting, and decision-support tools.
+## Current state
 
----
-
-## Project goals
-
-FireOps Intelligence aims to help fire departments:
-
-- centralize equipment and asset records;
-- track asset status, location, responsibility, and lifecycle;
-- preserve an auditable history of changes;
-- reduce duplicated, incomplete, or outdated information;
-- prepare clean operational data for future analytics and AI models;
-- support safer and more informed operational decisions.
-
----
-
-## Current scope
-
-The current phase focuses on **asset and inventory management**.
-
-Planned capabilities include:
-
-- asset registration;
-- asset search and retrieval;
-- inventory listing and filtering;
-- asset updates;
-- assignment to responsible personnel or departments;
-- asset transfers;
-- deactivation and lifecycle tracking;
-- file attachment support;
-- audit history;
-- identity and access management.
-
----
-
-## Future data science and AI roadmap
-
-As the project collects reliable operational data, future phases may include:
-
-- inventory dashboards and descriptive analytics;
-- equipment availability and readiness indicators;
-- maintenance and replacement forecasting;
-- anomaly detection in inventory movements;
-- asset failure-risk estimation;
-- demand forecasting for critical supplies;
-- document classification and information extraction;
-- intelligent search and natural-language reporting;
-- predictive decision-support tools for fire departments.
-
-> The AI layer will be introduced only after the operational data model, traceability, and data quality are stable.
-
----
-
-## Frontend direction
-
-The backend remains a FastAPI API. The planned web interface should be developed as a separate frontend application using **React + Vite + TypeScript**.
-
-Recommended learning path:
-
-```text
-React + Vite
-  ↓ calls HTTP endpoints
-FastAPI
-  ↓ uses SQLAlchemy
-PostgreSQL
-```
-
-This keeps responsibilities clear:
-
-| Layer | Responsibility |
+| Available now | Not implemented yet |
 |---|---|
-| React + Vite | User interface, forms, tables, filters, client-side state |
-| FastAPI | API endpoints, validation flow, application behavior |
-| SQLAlchemy | Python-to-database persistence layer |
-| PostgreSQL | Durable relational data storage |
+| `POST /inventory/categories`, `GET /inventory/categories`, `POST /inventory/assets` | Listing assets and getting an asset by ID (Task 06) |
+| PostgreSQL migration for `categorias` and `bienes` | Real registration, sign-in, Google OAuth or authorization |
+| Dashboard, registration and sign-in **visual demos** | Live dashboard metrics, movements, alerts, CSV from real inventory data |
 
-Astro may be useful later for public documentation or a landing page. Flutter may be useful later for mobile or tablet workflows. For the first internal web application, React + Vite is the clearest teaching path.
+The dashboard's figures are illustrative. Its API indicator and category count read `GET /health` and `GET /inventory/categories`; they do not turn the other widgets into live data. Registration/sign-in buttons navigate to the dashboard **without validating or storing credentials**. “Cerrar sesión” returns to the sign-in page; it does not invalidate a session. Do not use these screens as access control.
 
----
+## Quick start with the test database
 
-## Architecture
+Prerequisites: Python and PostgreSQL installed, a local `.venv` with dependencies from `requirements.txt`, and a private `.env.test` whose `DATABASE_URL` points to the existing `fireassets_test` database. Apply the committed Alembic migration to that database before using inventory endpoints. The startup scripts do **not** create the database or run migrations.
 
-The project follows a combination of:
-
-- **Modular Monolith**
-- **Vertical Slice Architecture**
-- **Centralized Exception Handling**
-- **Custom Exception Hierarchy**
-- **Single Responsibility Principle**
-- **Explicit separation between business rules and infrastructure**
-
-High-level structure:
-
-```text
-fire-control/
-├── app/
-│   ├── config/
-│   ├── infrastructure/
-│   ├── modules/
-│   │   ├── audit/
-│   │   ├── files/
-│   │   ├── identity/
-│   │   └── inventory/
-│   ├── shared/
-│   │   └── errors/
-│   └── main.py
-├── asset/
-│   └── profile.png
-├── docs/
-├── migrations/
-├── scripts/
-├── tests/
-├── .env.example
-├── .gitignore
-├── alembic.ini
-├── Makefile
-├── pyproject.toml
-├── README.md
-└── requirements.txt
+```bash
+# macOS / Linux, from the repository root
+./scripts/test-up.sh
 ```
 
-### Main architectural responsibilities
+```powershell
+# Windows PowerShell, from the repository root
+.\scripts\test-up.ps1
+```
 
-| Area | Responsibility |
+These scripts use the Python interpreter in `.venv`, set `ENV_FILE=.env.test` for the server process, reject a database name other than `fireassets_test`, and start Uvicorn at `http://127.0.0.1:8000`. Stop with `Ctrl+C`.
+
+| URL | What it currently serves |
 |---|---|
-| `app/config/` | Environment and application settings |
-| `app/infrastructure/` | Database, persistence, storage, and external integrations |
-| `app/modules/` | Business modules and vertical slices |
-| `app/shared/` | Cross-cutting reusable application components |
-| `docs/` | Requirements, architecture, and technical decisions |
-| `migrations/` | Versioned PostgreSQL schema changes |
-| `tests/` | Unit, integration, API, and architecture tests |
+| `/` | Dashboard demo (the server link opens this page) |
+| `/iniciar-sesion` | Sign-in visual demo |
+| `/registro` | Registration visual demo |
+| `/docs` | Swagger UI for implemented API endpoints |
+| `/health` | `{"status":"ok"}` |
 
----
+**Important:** `/` still opens the dashboard directly; the sign-in screen does not protect it. Opening the server link at sign-in instead is a separate pending routing change.
 
-## Technology stack
+For first-time setup, including creation and migration of `fireassets_test`, see [macOS](docs/getting-started/macos.md) or [Windows](docs/getting-started/windows.md). Never commit `.env` or `.env.test`.
 
-| Category | Technology |
+## API and data model
+
+| Method and path | Result |
 |---|---|
-| Language | Python 3.14 |
-| API framework | FastAPI |
-| ASGI server | Uvicorn |
-| Validation | Pydantic |
-| Configuration | Pydantic Settings |
-| Database | PostgreSQL |
-| ORM | SQLAlchemy 2 |
-| Migrations | Alembic |
-| PostgreSQL driver | asyncpg |
-| Authentication | PyJWT |
-| Password hashing | pwdlib with Argon2 |
-| Testing | pytest, pytest-asyncio, HTTPX |
-| Linting and formatting | Ruff |
-| Static typing | mypy |
-| Planned web frontend | React + Vite + TypeScript |
+| `POST /inventory/categories` | Create a category; `201` on success |
+| `GET /inventory/categories` | List categories ordered by ID; `200`, including `[]` |
+| `POST /inventory/assets` | Create an asset linked to an existing category; `201` on success |
 
----
+The `categorias` table has a unique name. The `bienes` table has a unique internal code and a required foreign key to `categorias.id`. The single committed migration is `0374d9a573a1`. See [Task 06](labs/TASK_06_GET_ASSET_BY_ID.md) for the **planned**, not yet implemented, read endpoints.
 
-## Requirements
+## Repository map
 
-Before running the project, install:
-
-- Python 3.14
-- PostgreSQL
-- Git
-- Make
-
-Check the installed versions:
-
-```bash
-python --version
-psql --version
-git --version
-make --version
-```
-
----
-
-## Local setup
-
-### 1. Clone the repository
-
-```bash
-git clone <REPOSITORY_URL>
-cd fire-control
-```
-
-### 2. Select Python 3.14 with pyenv
-
-```bash
-pyenv local 3.14.4
-python --version
-```
-
-Expected output:
-
-```text
-Python 3.14.4
-```
-
-### 3. Create the virtual environment
-
-```bash
-python -m venv .venv
-source .venv/bin/activate
-```
-
-Verify the interpreter:
-
-```bash
-python -c "import sys; print(sys.executable)"
-```
-
-### 4. Install dependencies
-
-```bash
-python -m pip install --upgrade pip
-pip install -r requirements.txt
-```
-
-### 5. Create the PostgreSQL database
-
-Open PostgreSQL:
-
-```bash
-psql postgres
-```
-
-Create the database:
-
-```sql
-CREATE DATABASE fireassets;
-```
-
-List databases:
-
-```text
-\l
-```
-
-Exit:
-
-```text
-\q
-```
-
-### 6. Configure environment variables
-
-Copy the example file:
-
-```bash
-cp .env.example .env
-```
-
-Example local configuration:
-
-```env
-APP_NAME=FireOps Intelligence
-ENVIRONMENT=development
-DATABASE_URL=postgresql+asyncpg://postgres:TU_PASSWORD@localhost:5432/fireassets
-SECRET_KEY=replace-this-value
-```
-
-On macOS with a local PostgreSQL user matching your system user, the URL may look like:
-
-```env
-DATABASE_URL=postgresql+asyncpg://luis@localhost:5432/fireassets
-```
-
-Never commit `.env`.
-
-### 7. Run database migrations
-
-After Alembic and the SQLAlchemy metadata are configured:
-
-```bash
-alembic upgrade head
-```
-
-### 8. Start the application
-
-```bash
-make run
-```
-
-The API will be available at:
-
-```text
-http://127.0.0.1:8000
-```
-
----
-
-## API documentation
-
-FastAPI automatically provides interactive documentation.
-
-Swagger UI:
-
-```text
-http://127.0.0.1:8000/docs
-```
-
-ReDoc:
-
-```text
-http://127.0.0.1:8000/redoc
-```
-
-Health endpoint:
-
-```text
-http://127.0.0.1:8000/health
-```
-
-Expected response:
-
-```json
-{
-  "status": "ok"
-}
-```
-
----
-
-## Development commands
-
-The project includes a `Makefile` to simplify common tasks.
-
-### Start the API
-
-```bash
-make run
-```
-
-### Run tests
-
-```bash
-make test
-```
-
-### Check code quality
-
-```bash
-make lint
-```
-
-### Format the codebase
-
-```bash
-make format
-```
-
-### Apply automatic fixes
-
-```bash
-make fix
-```
-
----
-
-## Error handling
-
-The project uses centralized exception handling with a custom exception hierarchy.
-
-```text
-Exception
-└── ApplicationError
-    ├── BusinessRuleError
-    ├── ConflictError
-    └── NotFoundError
-```
-
-This allows the business logic to raise application-specific errors without depending directly on FastAPI response classes.
-
-Example response:
-
-```json
-{
-  "error": {
-    "code": "ASSET_NOT_FOUND",
-    "message": "The requested asset was not found.",
-    "details": {
-      "asset_id": "asset-001"
-    }
-  }
-}
-```
-
----
-
-## Business domain
-
-The main domain concepts include:
-
-- assets;
-- equipment;
-- vehicles;
-- responsible personnel;
-- departments;
-- inventory status;
-- transfers;
-- deactivation;
-- audit records;
-- attached files.
-
-Examples of business rules:
-
-- an asset code must be unique;
-- a deactivated asset cannot be transferred;
-- every transfer must identify the previous and new responsible party;
-- critical changes must create an audit record;
-- only authorized users may perform restricted operations.
-
----
-
-## Testing
-
-Run the complete test suite:
-
-```bash
-pytest -v
-```
-
-Suggested testing levels:
-
-- unit tests for business rules;
-- slice-level tests for use cases;
-- repository integration tests;
-- FastAPI endpoint tests;
-- migration tests;
-- architecture-boundary tests.
-
----
-
-## Learning labs
-
-Beginner-friendly class material is stored under:
-
-```text
-labs/
-```
-
-The labs are designed for four participants who are learning Git, GitHub, PostgreSQL, FastAPI, SQLAlchemy, Alembic, and testing. Each participant works in an isolated folder, creates their own branch, opens a Pull Request, and the maintainer decides which implementation is merged.
-
-Current class path:
-
-| Task | Focus |
+| Path | Purpose |
 |---|---|
-| Task 01 | Verify the existing database configuration |
-| Task 02 | Create `categorias` and `bienes` with Alembic |
-| Task 03 | Register an asset through `POST /inventory/assets` |
-| Task 04 | Test asset registration |
+| `app/main.py` | FastAPI app, routes and static frontend serving |
+| `app/modules/inventory/` | Inventory routers, schemas and SQLAlchemy models |
+| `app/infrastructure/database/` | Async database engine and session dependency |
+| `migrations/` | Alembic schema migration |
+| `frontend/` | Vanilla HTML/CSS/JS dashboard and account-page demos |
+| `scripts/` | Test-database startup and Task 05 test scripts |
+| `tests/` | API tests; Task 06 test file is currently empty |
+| `labs/` | Current and completed classroom tasks |
+| `docs/` | Progress, setup guides and architecture decisions |
 
-The endpoint flow diagram used in class is stored at:
+Start with the [documentation map](docs/README.md), then see [frontend usage](frontend/README.md), the [ADR index](docs/architecture/adr/README.md) and [project progress](docs/PROGRESS.md). The Word files under `docs/architecture-history/` are historical proposals, not the current runtime specification.
 
-```text
-labs/assets/endpoint-data-flow-nodes.png
+## Tests and limitations
+
+With `.venv` active and `.env.test` pointing to `fireassets_test`, the Task 05 scripts run Alembic and pytest:
+
+```bash
+./scripts/task05_run_tests_mac.sh
 ```
 
----
-
-## Documentation
-
-Project documentation is stored under:
-
-```text
-docs/
+```powershell
+.\scripts\task05_run_tests_windows.ps1
 ```
 
-Recommended sections:
+These Task 05 scripts use the **current** `python` executable and do not independently verify the database name. Check the active environment and `.env.test` before running them. The frontend/static-route checks can be run separately with `python -m pytest -q tests/test_main_endpoints.py`.
 
-```text
-docs/
-├── architecture/
-├── architecture-history/
-├── getting-started/
-├── phase_01/
-└── technical-decisions/
-```
+The current interface is a prototype, not an authenticated application or a live operational inventory. React + Vite + TypeScript was proposed for a future internal frontend but is **not** the implementation in this repository today.
 
-Technical documents should preferably be stored in Markdown for GitHub readability. Formal `.docx` documents may also be included when necessary.
+## Longer-term direction
 
----
-
-## Project status
-
-**Current stage:** foundation and architecture setup.
-
-Completed:
-
-- Python 3.14 environment;
-- FastAPI application bootstrap;
-- PostgreSQL local database;
-- Alembic initialization;
-- project structure;
-- centralized error handling;
-- development commands with Make;
-- automatic API documentation;
-- Ruff formatting and linting setup.
-
-Next milestone:
-
-- implement the first real inventory vertical slice;
-- define the initial asset data model;
-- create the first SQLAlchemy models and Alembic migration;
-- add integration tests;
-- expose the first production-ready inventory endpoint.
-
----
-
-## Vision
-
-FireOps Intelligence is intended to become more than an inventory application.
-
-The long-term goal is to build a reliable operational data foundation that can later support analytics, machine learning, predictive maintenance, resource planning, and AI-assisted decision making for fire departments.
-
-The priority is to create trustworthy software, preserve data quality, and solve real operational problems before introducing advanced AI features.
-
----
-
-## Author
-
-Developed as an early data science and artificial intelligence portfolio project focused on public-service impact, operational traceability, and responsible AI adoption.
-
----
-
+The project aims to add reliable asset lifecycle tracking, responsibility and location records, movements, audit history and eventually operational analytics. Predictive maintenance or other AI features remain future possibilities, not current capabilities; they depend on trustworthy operational data first.
 
 ## License
 
-A license has not yet been selected.
+No license has been selected yet.

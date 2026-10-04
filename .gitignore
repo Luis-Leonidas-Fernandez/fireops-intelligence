@@ -61,17 +61,14 @@ logs/
 *.sqlite
 *.sqlite3
 *.db
+*.session.sql
 tmp/
 temp/
 
 # Alembic temporary files
 alembic.ini.bak
 
-# Local Alembic practice migrations
-# During class, participants generate their own migration files.
-# The instructor will decide which migration becomes official.
-# Add the official migration explicitly with: git add -f migrations/versions/<file>.py
-migrations/versions/*.py
+# Alembic revisions are source code and must remain visible for review.
 
 # Uploaded or generated local files
 uploads/
@@ -84,5 +81,5 @@ settings.local.*
 
 # Keep empty directories when needed
 !.gitkeep
-# Local Word teaching artifacts
-labs/TASK_04_ENDPOINTS_CATEGORIAS.docx
+# Local Word teaching artifact (already tracked copies require git rm --cached)
+labs/completed/TASK_04_ENDPOINTS_CATEGORIAS.docx

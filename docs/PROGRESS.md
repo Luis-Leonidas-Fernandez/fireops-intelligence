@@ -8,19 +8,40 @@ Al finalizar una jornada, decime `cerramos la jornada`. Se agregará una nueva f
 
 ## Estado actual
 
-- PostgreSQL está conectado a la base de datos `fireassets`.
-- Existen las tablas iniciales `categorias` y `bienes`.
-- El endpoint `POST /inventory/assets` fue implementado en la Task 03.
-- Las Tasks 03 y 04 ya implementaron:
-  - `POST /inventory/assets`
-  - `POST /inventory/categories`
-  - `GET /inventory/categories`
-- La Task 05 está completada y el equipo confirmó que sus pruebas pasan en todos los entornos.
-- La Task 06 agrega `GET /inventory/assets` para listar bienes y `GET /inventory/assets/{asset_id}` para consultar uno por ID; contempla respuestas `200`, `404` y `422`.
-- La guía de SQLTools está en `vscode-tools.md`.
-- Material Icon Theme está habilitado y seleccionado en el espacio de trabajo local de VS Code.
+- La migración `0374d9a573a1` define `categorias` y `bienes`, con clave foránea de bien a categoría. Cada integrante debe aplicarla en su propia base; este archivo no confirma el estado de cada PostgreSQL local.
+- Están implementados `POST /inventory/assets`, `POST /inventory/categories` y `GET /inventory/categories`. La Task 05 fue completada y el equipo confirmó sus pruebas en sus entornos en septiembre.
+- La **Task 06 sigue pendiente**: `app/modules/inventory/get_asset/router.py` y `tests/modules/inventory/test_get_asset_endpoint.py` están vacíos, y el router no está registrado. `GET /inventory/assets` y `GET /inventory/assets/{asset_id}` todavía no existen.
+- FastAPI sirve un dashboard HTML/CSS/JS en `/`, registro en `/registro` e inicio de sesión en `/iniciar-sesion`. No hay autenticación real ni protección del dashboard.
+- Dashboard: diseño responsive, acento rojo, modo claro/oscuro, datos ilustrativos y conteo real de categorías. Las cifras, movimientos, alertas y CSV son demostraciones; no representan el inventario de PostgreSQL.
+- Los formularios y el botón de Google solo navegan a `/`. «Cerrar sesión» navega a `/iniciar-sesion`, sin invalidar sesión alguna.
+- `scripts/test-up.sh` y `scripts/test-up.ps1` inician API y web con `.venv` y `.env.test`, verificando que la URL apunte a `fireassets_test`; no crean la base ni ejecutan migraciones.
+- La guía de SQLTools sigue en `vscode-tools.md`. `docs/README.md` organiza las guías, la arquitectura actual y los ADR; el ADR-004 de aislamiento de tests está propuesto, no implementado.
 
 ## Registro de jornadas
+
+### 2026-10-03
+
+#### Completado
+
+- Se incorporó a FastAPI el frontend local: dashboard y páginas separadas de registro e inicio de sesión.
+- Se refinó el dashboard para el contexto de bomberos: tarjetas adaptables, sidebar, icono de fuego, paleta roja y barra de estado segmentada por porcentaje. Los contenidos estadísticos continúan siendo ficticios.
+- Se agregó el cambio visual entre modo oscuro y claro desde el app bar.
+- Se conectó «Cerrar sesión» con `/iniciar-sesion`; el resto de los botones de acceso siguen siendo navegación simulada.
+- Se evitó la mezcla de HTML nuevo con JavaScript cacheado en Brave mediante `Cache-Control: no-store` y URLs versionadas para recursos del dashboard.
+- Se actualizaron README, ADR, guías de inicio y esta bitácora para separar funcionalidades reales, demostraciones y pendientes.
+- Se reorganizó `docs/`: Word de configuración/clases en `getting-started/`, arquitectura actual en `architecture/backend/` y `architecture/frontend/`, y cuatro ADR en `architecture/adr/`. `Phase_01/` y `architecture-history/` conservan sus archivos originales.
+- Verificación de esta actualización: `python -m pytest -q tests/test_main_endpoints.py` → 8 pruebas correctas; no se ejecutó aquí la suite completa contra PostgreSQL.
+
+#### Pendiente
+
+- Implementar y probar la Task 06 (listar bienes y obtener un bien por ID, con aislamiento de tests).
+- Decidir e implementar el flujo de entrada por inicio de sesión: actualmente el enlace de Uvicorn abre `/`, que sirve el dashboard.
+- Diseñar autenticación/autorización real antes de usar las pantallas de acceso para proteger datos.
+- Sustituir métricas ficticias por endpoints y contratos de datos reales cuando ese alcance se apruebe.
+
+#### Próximo paso recomendado
+
+Implementar Task 06 en una rama de trabajo y mantener el frontend claramente rotulado como demostración hasta contar con datos reales y autenticación.
 
 ### 2026-09-30
 
@@ -33,14 +54,14 @@ Al finalizar una jornada, decime `cerramos la jornada`. Se agregará una nueva f
 
 #### Decisiones importantes
 
-- La Task 06 no crea una migración ni lista todos los bienes: consulta un único bien por su ID.
+- Nota histórica: inicialmente se describió Task 06 como consulta individual. La guía actual también incluye listado de bienes; prevalece `labs/TASK_06_GET_ASSET_BY_ID.md`.
 - Los tests de la Task 06 deben usar `fireassets_test` y no depender de registros manuales ni de IDs fijos.
 - Los scripts `scripts/test-up.sh` y `scripts/test-up.ps1` usan `.venv`, cargan `.env.test` y se niegan a iniciar si la URL no apunta a `fireassets_test`.
 - Una guía se considera terminada para archivarla cuando el equipo confirma que la implementación correspondiente quedó integrada en `main`.
 
 #### Pendiente
 
-- Implementar y probar `GET /inventory/assets/{asset_id}` en la Task 06.
+- Implementar y probar el listado y la consulta por ID de bienes en la Task 06.
 
 #### Próximo paso recomendado
 

@@ -22,7 +22,7 @@ window.DashboardData = {
     { label: "Repuestos", inService: 59, maintenance: 1, retired: 1 }
   ],
   statuses: [
-    { name: "En servicio", short: "S", share: 86.0, total: 1087, color: "#a46aff" },
+    { name: "En servicio", short: "S", share: 86.0, total: 1087, color: "#E53935" },
     { name: "En mantenimiento", short: "M", share: 11.3, total: 143, color: "#ef741d" },
     { name: "Bajas", short: "B", share: 2.7, total: 34, color: "#f6c548" }
   ],

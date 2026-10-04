@@ -25,7 +25,7 @@
       const total = category.inService + category.maintenance + category.retired;
       return `<div class="bar-group" title="${category.label}: ${number.format(scaled(total, multiplier))} bienes · Datos de demostración">
         <div class="bar-stack" style="height:${Math.min(96, total / 3.3)}%">
-          <i class="bar-segment violet" style="height:${category.inService / total * 100}%;animation-delay:${index * 35}ms"></i>
+          <i class="bar-segment primary" style="height:${category.inService / total * 100}%;animation-delay:${index * 35}ms"></i>
           <i class="bar-segment orange" style="height:${category.maintenance / total * 100}%;animation-delay:${index * 35 + 30}ms"></i>
           <i class="bar-segment yellow" style="height:${category.retired / total * 100}%;animation-delay:${index * 35 + 60}ms"></i>
         </div><span class="bar-label">${category.label}</span></div>`;
@@ -35,7 +35,7 @@
   function renderStatuses(multiplier) {
     document.querySelector("#channel-totals").innerHTML = data.statuses.map(status => `<div class="channel-total"><small><i class="channel-dot" style="background:${status.color}"></i>${status.name}</small><strong>${status.share.toFixed(1)}%</strong></div>`).join("");
     document.querySelector("#channel-list").innerHTML = data.statuses.map(status => `<li class="channel-row"><span class="channel-name"><i class="channel-symbol" style="--channel-color:${status.color}">${status.short}</i>${status.name}</span><span>${status.share.toFixed(0)}%</span><span>${number.format(scaled(status.total, multiplier))}</span></li>`).join("");
-    document.querySelector("#signal-strip").innerHTML = Array.from({ length: 54 }, (_, index) => `<i style="--signal-opacity:${.18 + ((index * 17) % 83) / 100};background:${data.statuses[index % 7 === 0 ? 1 : index % 11 === 0 ? 2 : 0].color}"></i>`).join("");
+    document.querySelector("#signal-strip").innerHTML = data.statuses.map(status => `<i class="signal-segment" title="${status.name}: ${status.share.toFixed(1)}%" style="--signal-share:${status.share};background:${status.color}"></i>`).join("");
   }
 
   function renderMovements(query, multiplier) {

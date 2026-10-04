@@ -5,12 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Panel de demostración de inventario para Fire Control Bomberos.">
   <title>Fire Control — Inventario general</title>
-  <link rel="stylesheet" href="css/tokens.css">
-  <link rel="stylesheet" href="css/components.css">
-  <link rel="stylesheet" href="css/layout.css">
-  <script src="js/data.js" defer></script>
-  <script src="js/render.js" defer></script>
-  <script src="js/app.js" defer></script>
+  <link rel="stylesheet" href="css/tokens.css?v=20261003-light-theme">
+  <link rel="stylesheet" href="css/components.css?v=20261003-light-theme">
+  <link rel="stylesheet" href="css/layout.css?v=20261003-light-theme">
+  <link rel="stylesheet" href="css/theme-light.css?v=20261003-light-theme">
+  <script src="js/data.js?v=20261003-light-theme" defer></script>
+  <script src="js/render.js?v=20261003-light-theme" defer></script>
+  <script src="js/app.js?v=20261003-light-theme" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#main-content">Saltar al contenido del inventario</a>
@@ -18,8 +19,9 @@
     <aside class="sidebar" aria-label="Navegación principal">
       <a class="brand" href="#main-content" aria-label="Fire Control Bomberos, inventario general">
         <span class="brand-mark" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="var(--violet-bright)" xmlns="http://www.w3.org/2000/svg">
-            <path d="M8.5 14.5A6 6 0 0 1 11 3c0 2.5 2 4.5 4 6 1.5 1.1 2.5 3 2.5 5.5a6 6 0 0 1-12 0c0-1.5.5-3.5 3-6 0 2.5 0 4 0 6Z"/>
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M8.5 14.5A6 6 0 0 1 11 3c0 2.5 2 4.5 4 6 1.5 1.1 2.5 3 2.5 5.5a6 6 0 0 1-12 0c0-1.5.5-3.5 3-6 0 2.5 0 4 0 6Z" fill="var(--orange)"/>
+            <path d="M12 12.5c-.25 1.1-.95 2.15-1.7 3.15-.6.8-.9 1.4-.9 2.2A2.6 2.6 0 0 0 12 20.4a2.6 2.6 0 0 0 2.6-2.55c0-1.55-1.05-2.85-2.6-5.35Z" fill="var(--yellow)"/>
           </svg>
         </span>
         <span class="brand-name"><span>Fire</span><span>Control</span><span>BOMBEROS</span></span>
@@ -77,7 +79,7 @@
           <kbd>⌘ K</kbd>
         </form>
         <div class="topbar-actions">
-          <button class="icon-button" type="button" aria-label="Alternar brillo reducido" id="brightness-toggle">☼</button>
+          <button class="icon-button" type="button" aria-label="Activar modo claro" aria-pressed="false" id="brightness-toggle">☼</button>
           <button class="icon-button notification-button" type="button" aria-label="Notificaciones">♢<span></span></button>
           <span class="topbar-divider" aria-hidden="true"></span>
           <button class="profile-button" type="button" aria-label="Abrir menú de perfil">
@@ -123,7 +125,7 @@
             <header class="panel-header">
               <div><p class="panel-kicker">Datos de demostración</p><h2>Bienes por categoría</h2></div>
               <div class="legend" aria-label="Referencias del gráfico">
-                <span><i class="violet"></i>En servicio</span><span><i class="orange"></i>En mantenimiento</span><span><i class="yellow"></i>Bajas</span>
+                <span><i class="primary"></i>En servicio</span><span><i class="orange"></i>En mantenimiento</span><span><i class="yellow"></i>Bajas</span>
               </div>
             </header>
             <div class="chart-summary" id="chart-summary"></div>
@@ -163,7 +165,7 @@
             <header class="panel-header"><div><p class="panel-kicker">Datos de demostración</p><h2>Alertas <span class="count-badge">7</span></h2></div><button class="more-button" aria-label="Más opciones de alertas" type="button">•••</button></header>
             <div class="map-stage" role="img" aria-label="Resumen visual ilustrativo de alertas por ubicación operativa">
               <svg viewBox="0 0 800 360" aria-hidden="true" focusable="false">
-                <defs><linearGradient id="mapGradient" x1="0" x2="1"><stop stop-color="#f48220"/><stop offset=".42" stop-color="#8e59ff"/><stop offset="1" stop-color="#6235c9"/></linearGradient></defs>
+                <defs><linearGradient id="mapGradient" x1="0" x2="1"><stop stop-color="#f48220"/><stop offset=".42" stop-color="#E53935"/><stop offset="1" stop-color="#C62828"/></linearGradient></defs>
                 <g class="map-grid"><path d="M0 90H800M0 180H800M0 270H800M200 0V360M400 0V360M600 0V360"/></g>
                 <g fill="url(#mapGradient)">
                   <path d="M74 82l38-29 74-6 48 18 34 35-16 30-46 9-18 27-38-11-25-32-42-10z"/>

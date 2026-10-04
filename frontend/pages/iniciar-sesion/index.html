@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="es-AR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="description" content="Página de inicio de sesión de Fire Control." />
+    <title>Iniciar sesión | Fire Control</title>
+    <link rel="stylesheet" href="/css/registro.css" />
+  </head>
+  <body>
+    <main class="registration-page login-page">
+      <article class="registration-card login-card" aria-labelledby="login-title">
+        <section class="form-panel">
+          <a class="brand" href="/registro" aria-label="Fire Control, volver al registro">
+            <span class="brand-mark" aria-hidden="true">
+              <svg viewBox="0 0 40 48" role="img"><path d="M22.8 2.5c1.8 8.4-4.1 11.3-7.2 16.7-2.2 3.7-1.5 7.1 1.3 9.5-.2-4.4 2.4-7.2 5.8-10 1.1 4.5 5.5 7.2 5.5 13.3 0 7.2-4.1 12.2-8.9 13.3C11.7 44.6 5 39.5 5 31.6c0-8.1 5.4-12.8 10-17.4 3.9-3.8 6.4-7.1 7.8-11.7Z" /></svg>
+            </span>
+            <span class="brand-copy"><strong>Fire Control</strong><span>Bomberos</span></span>
+          </a>
+
+          <div class="form-content login-content">
+            <header class="form-header">
+              <p class="eyebrow">Acceso operativo</p>
+              <h1 id="login-title">Iniciar sesión</h1>
+              <p>Ingresá con tu correo institucional para acceder al panel de gestión interna.</p>
+            </header>
+
+            <form id="login-form" novalidate>
+              <div class="field-group">
+                <label for="email">Correo electrónico</label>
+                <input id="email" name="email" type="email" inputmode="email" autocomplete="email" placeholder="nombre@organizacion.com" required />
+              </div>
+
+              <div class="field-group">
+                <label for="password">Contraseña</label>
+                <div class="password-field">
+                  <input id="password" name="password" type="password" autocomplete="current-password" placeholder="Ingresá tu contraseña" required />
+                  <button class="password-toggle" type="button" data-target="password" aria-label="Mostrar contraseña" aria-pressed="false">
+                    <svg class="eye-open" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.7"/></svg>
+                  </button>
+                </div>
+              </div>
+
+              <button class="submit-button" type="submit">Iniciar sesión</button>
+              <button class="google-button" type="button" aria-label="Continuar con Google">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path fill="#4285F4" d="M21.6 12.23c0-.71-.06-1.4-.18-2.07H12v3.91h5.38a4.6 4.6 0 0 1-2 3.02v2.54h3.24c1.9-1.75 2.98-4.33 2.98-7.4Z" />
+                  <path fill="#34A853" d="M12 22c2.7 0 4.98-.9 6.63-2.42l-3.24-2.5c-.9.6-2.05.96-3.39.96-2.61 0-4.82-1.76-5.61-4.13H3.04v2.59A10 10 0 0 0 12 22Z" />
+                  <path fill="#FBBC05" d="M6.39 13.91A6.02 6.02 0 0 1 6.07 12c0-.66.11-1.3.32-1.91V7.5H3.04A10 10 0 0 0 2 12c0 1.61.38 3.14 1.04 4.5l3.35-2.59Z" />
+                  <path fill="#EA4335" d="M12 5.96c1.47 0 2.79.5 3.83 1.5l2.87-2.87A9.63 9.63 0 0 0 12 2a10 10 0 0 0-8.96 5.5l3.35 2.59C7.18 7.72 9.39 5.96 12 5.96Z" />
+                </svg>
+              </button>
+            </form>
+
+            <p class="sign-in-copy account-copy">¿No tenés cuenta? <a href="/registro">Crear cuenta</a></p>
+          </div>
+
+          <footer class="form-footer">© 2026 Fire Control</footer>
+        </section>
+
+        <aside class="visual-panel" aria-label="Superficie visual de Fire Control">
+          <div class="visual-orbit visual-orbit--one"></div>
+          <div class="visual-orbit visual-orbit--two"></div>
+          <div class="visual-grid" aria-hidden="true"></div>
+          <div class="visual-copy"><span class="visual-kicker">Control operativo</span><p>Atención de emergencias 24 hs.</p></div>
+          <p class="visual-caption">Gestión interna para equipos de bomberos</p>
+        </aside>
+      </article>
+    </main>
+    <script src="/js/iniciar-sesion.js" defer></script>
+  </body>
+</html>

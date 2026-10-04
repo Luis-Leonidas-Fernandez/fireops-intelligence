@@ -1,31 +1,3 @@
-Directory tree
+# Arquitectura
 
-fire-control/
-├── app/
-│   ├── config/
-│   ├── infrastructure/
-│   ├── modules/
-│   │   ├── audit/
-│   │   ├── files/
-│   │   ├── identify/
-│   │   └── inventory/
-│   │
-│   └── shared/
-│       └── errors/
-│           ├── application_error.py
-│           ├── business_rule.py
-│           ├── conflict_error.py
-│           ├── handlers.py
-│           └── not_found_error.py
-│
-├── docs/
-├── migrations/
-├── scripts/
-├── tests/
-├── .env
-├── .env.example
-├── .gitignore
-├── alembic.ini
-├── pyprojects.toml
-├── README.md
-└── requirements.txt
+La documentación de arquitectura vigente está en [docs/architecture/README.md](docs/architecture/README.md): allí se separan la descripción actual del backend/frontend y los registros de decisiones (ADR). Este archivo se conserva únicamente como punto de entrada desde enlaces antiguos.

@@ -1,0 +1,82 @@
+/* The dashboard is dark by default; these overrides apply only after the toggle is pressed. */
+html[data-theme="light"] {
+  color-scheme: light;
+  --page: #edf1f5;
+  --shell: #f6f8fa;
+  --sidebar: #ffffff;
+  --surface: #ffffff;
+  --surface-raised: #f2f4f7;
+  --surface-soft: #e9edf2;
+  --text: #202833;
+  --text-soft: #384454;
+  --muted: #586575;
+  --faint: #647286;
+  --border: #dce2e9;
+  --border-strong: #bdc8d3;
+  --focus: #C62828;
+}
+
+html[data-theme="light"] body {
+  background: radial-gradient(circle at 50% 10%, #ffffff 0, var(--page) 60%, #e4e9ef 100%);
+}
+
+html[data-theme="light"] .kpi-card,
+html[data-theme="light"] .panel {
+  background: linear-gradient(150deg, #ffffff, #f3f5f8);
+  box-shadow: 0 2px 12px rgba(24, 36, 52, .045);
+}
+
+html[data-theme="light"] .upgrade-card {
+  background: linear-gradient(145deg, #ffffff, #f2f4f7);
+}
+
+html[data-theme="light"] .global-search kbd,
+html[data-theme="light"] .table-search {
+  background: #f2f4f7;
+}
+
+html[data-theme="light"] .map-stage {
+  background: radial-gradient(circle at 65% 45%, rgba(229, 57, 53, .08), transparent 38%), #f0f3f7;
+}
+
+html[data-theme="light"] .map-grid {
+  stroke: #d9e0e8;
+}
+
+html[data-theme="light"] .map-callout,
+html[data-theme="light"] .toast {
+  background: rgba(255, 255, 255, .94);
+}
+
+html[data-theme="light"] .map-callout {
+  border-color: var(--border);
+}
+
+html[data-theme="light"] .skip-link {
+  color: #ffffff;
+}
+
+html[data-theme="light"] .export-button,
+html[data-theme="light"] .upgrade-icon,
+html[data-theme="light"] .mobile-nav button.is-active {
+  color: #ffffff;
+}
+
+html[data-theme="light"] .brand-name span:last-child,
+html[data-theme="light"] .eyebrow,
+html[data-theme="light"] .kpi-icon,
+html[data-theme="light"] .trend.up,
+html[data-theme="light"] .api-status[data-state="connected"] {
+  color: #B3261E;
+}
+
+html[data-theme="light"] .trend.down {
+  color: #B3261E;
+}
+
+@media (max-width: 650px) {
+  html[data-theme="light"] .topbar,
+  html[data-theme="light"] .mobile-nav {
+    background: rgba(255, 255, 255, .96);
+  }
+}

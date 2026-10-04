@@ -9,6 +9,7 @@
   const mobileNav = document.querySelector("#mobile-nav");
   const toast = document.querySelector("#toast");
   const apiStatus = document.querySelector("#api-status");
+  const themeToggle = document.querySelector("#brightness-toggle");
   let toastTimer;
 
   async function checkApiConnection() {
@@ -71,7 +72,16 @@
   movementSearch.addEventListener("input", () => renderer.renderMovements(movementSearch.value, data.periods[dateRange.value].multiplier));
   globalSearch.addEventListener("input", () => { movementSearch.value = globalSearch.value; renderer.renderMovements(globalSearch.value, data.periods[dateRange.value].multiplier); });
   document.querySelector("#export-button").addEventListener("click", exportCsv);
-  document.querySelector("#brightness-toggle").addEventListener("click", event => { document.body.classList.toggle("is-dimmed"); event.currentTarget.setAttribute("aria-pressed", String(document.body.classList.contains("is-dimmed"))); showToast("Contraste de pantalla actualizado"); });
+  document.querySelector(".logout-button").addEventListener("click", () => {
+    window.location.assign("/iniciar-sesion");
+  });
+  themeToggle.addEventListener("click", () => {
+    const lightMode = document.documentElement.dataset.theme !== "light";
+    document.documentElement.dataset.theme = lightMode ? "light" : "dark";
+    themeToggle.setAttribute("aria-pressed", String(lightMode));
+    themeToggle.setAttribute("aria-label", lightMode ? "Activar modo oscuro" : "Activar modo claro");
+    showToast(lightMode ? "Modo claro activado" : "Modo oscuro activado");
+  });
   mobileMenu.addEventListener("click", () => { const expanded = mobileMenu.getAttribute("aria-expanded") === "true"; mobileMenu.setAttribute("aria-expanded", String(!expanded)); mobileNav.hidden = expanded; });
   document.querySelectorAll(".table-tabs button").forEach(button => button.addEventListener("click", () => { document.querySelectorAll(".table-tabs button").forEach(tab => { tab.classList.toggle("is-active", tab === button); tab.setAttribute("aria-selected", String(tab === button)); }); showToast(`Filtro ilustrativo: ${button.textContent.toLowerCase()}`); }));
   document.addEventListener("keydown", event => { if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") { event.preventDefault(); globalSearch.focus(); } });
