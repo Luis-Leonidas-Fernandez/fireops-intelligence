@@ -1,7 +1,9 @@
 import pytest
 from httpx import ASGITransport, AsyncClient
 
+from app.config.settings import get_settings
 from app.main import app
+from app.modules.auth.validations.tokens import ACCESS_TOKEN_COOKIE, create_access_token
 
 
 @pytest.mark.asyncio
@@ -9,8 +11,14 @@ async def test_root_serves_frontend() -> None:
     transport = ASGITransport(app=app)
 
     async with AsyncClient(transport=transport, base_url="http://test") as client:
+        unauthenticated = await client.get("/")
+        client.cookies.set(
+            ACCESS_TOKEN_COOKIE, create_access_token(1, get_settings().secret_key)
+        )
         response = await client.get("/")
 
+    assert unauthenticated.status_code == 303
+    assert unauthenticated.headers["location"] == "/iniciar-sesion"
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/html")
     assert "Fire Control — Inventario general" in response.text
@@ -26,6 +34,7 @@ async def test_registration_page_is_separate_from_dashboard() -> None:
         page = await client.get("/registro")
         stylesheet = await client.get("/css/registro.css")
         script = await client.get("/js/registro.js")
+        shared_script = await client.get("/js/auth-form.js")
 
     assert page.status_code == 200
     assert "Crear cuenta | Fire Control" in page.text
@@ -34,8 +43,8 @@ async def test_registration_page_is_separate_from_dashboard() -> None:
     assert "El inicio de sesión todavía no está disponible" not in page.text
     assert 'class="submit-button" type="submit"' in page.text
     assert '<a href="/iniciar-sesion">Iniciar sesión</a>' in page.text
-    assert "<dialog" not in page.text
-    assert 'event.preventDefault()' in script.text
+    assert '<dialog id="auth-error-dialog"' in page.text
+    assert "event.preventDefault()" in shared_script.text
     assert "Atención de emergencias 24 hs." in page.text
     assert 'href="/css/registro.css"' in page.text
     assert 'src="/js/registro.js"' in page.text
@@ -44,9 +53,9 @@ async def test_registration_page_is_separate_from_dashboard() -> None:
     assert 'aria-label="Continuar con Google" disabled' not in page.text
     assert stylesheet.status_code == 200
     assert script.status_code == 200
-    assert 'window.location.assign("/")' in script.text
-    assert 'googleButton?.addEventListener("click", goToDashboard)' in script.text
-    assert "fetch(" not in script.text
+    assert 'endpoint: "/auth/register"' in script.text
+    assert 'src="/js/validations/credentials.js"' in page.text
+    assert 'src="/js/auth-form.js"' in page.text
 
 
 @pytest.mark.asyncio
@@ -56,6 +65,7 @@ async def test_sign_in_page_is_separate_from_registration() -> None:
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         page = await client.get("/iniciar-sesion")
         script = await client.get("/js/iniciar-sesion.js")
+        shared_script = await client.get("/js/auth-form.js")
 
     assert page.status_code == 200
     assert "Iniciar sesión | Fire Control" in page.text
@@ -65,15 +75,15 @@ async def test_sign_in_page_is_separate_from_registration() -> None:
     assert '<a href="/registro">Crear cuenta</a>' in page.text
     assert 'href="/css/registro.css"' in page.text
     assert 'src="/js/iniciar-sesion.js"' in page.text
-    assert "<dialog" not in page.text
+    assert '<dialog id="auth-error-dialog"' in page.text
     assert "GitHub" not in page.text
     assert 'aria-label="Continuar con Google"' in page.text
     assert 'aria-label="Continuar con Google" aria-disabled' not in page.text
     assert script.status_code == 200
-    assert 'event.preventDefault()' in script.text
-    assert 'window.location.assign("/")' in script.text
-    assert 'googleButton?.addEventListener("click", goToDashboard)' in script.text
-    assert "fetch(" not in script.text
+    assert "event.preventDefault()" in shared_script.text
+    assert 'endpoint: "/auth/login"' in script.text
+    assert 'src="/js/validations/credentials.js"' in page.text
+    assert 'src="/js/auth-form.js"' in page.text
 
 
 @pytest.mark.asyncio
@@ -81,6 +91,9 @@ async def test_frontend_assets_and_api_routes_coexist() -> None:
     transport = ASGITransport(app=app)
 
     async with AsyncClient(transport=transport, base_url="http://test") as client:
+        client.cookies.set(
+            ACCESS_TOKEN_COOKIE, create_access_token(1, get_settings().secret_key)
+        )
         stylesheet = await client.get("/css/tokens.css")
         light_stylesheet = await client.get("/css/theme-light.css")
         script = await client.get("/js/app.js")
@@ -100,7 +113,7 @@ async def test_frontend_assets_and_api_routes_coexist() -> None:
     assert 'aria-label="Activar modo claro"' in dashboard.text
     assert script.status_code == 200
     assert script.headers["cache-control"] == "no-store"
-    assert 'document.documentElement.dataset.theme' in script.text
+    assert "document.documentElement.dataset.theme" in script.text
     assert '"Activar modo oscuro"' in script.text
     assert 'fetch("/health"' in script.text
     assert 'fetch("/inventory/categories"' in script.text
@@ -139,9 +152,7 @@ async def test_other_origins_cannot_read_api_from_browser() -> None:
     transport = ASGITransport(app=app)
 
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.get(
-            "/health", headers={"Origin": "http://example.com"}
-        )
+        response = await client.get("/health", headers={"Origin": "http://example.com"})
 
     assert response.status_code == 200
     assert "access-control-allow-origin" not in response.headers

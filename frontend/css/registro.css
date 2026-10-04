@@ -263,6 +263,25 @@ form {
   display: none;
 }
 
+.field-error {
+  color: #ffb4bb;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.field-error:empty {
+  display: none;
+}
+
+.field-group input[aria-invalid="true"] {
+  border-color: #f0524e;
+}
+
+.form-status[data-state="success"] {
+  color: #8ce3b5;
+  text-align: center;
+}
+
 .submit-button {
   min-height: 52px;
   border: 1px solid rgba(255, 255, 255, 0.14);
@@ -284,6 +303,79 @@ form {
   background: var(--accent-pressed);
   transform: translateY(1px);
 }
+
+.submit-button:disabled {
+  cursor: progress;
+  opacity: 0.82;
+}
+
+.particle-loader {
+  display: inline-block;
+  width: 25px;
+  height: 25px;
+  vertical-align: middle;
+  background:
+    radial-gradient(circle, #fff 2px, transparent 3px) 50% 0 / 5px 5px no-repeat,
+    radial-gradient(circle, #fff 2px, transparent 3px) 85% 15% / 5px 5px no-repeat,
+    radial-gradient(circle, #fff 2px, transparent 3px) 100% 50% / 5px 5px no-repeat,
+    radial-gradient(circle, #fff 2px, transparent 3px) 85% 85% / 5px 5px no-repeat,
+    radial-gradient(circle, #fff 2px, transparent 3px) 50% 100% / 5px 5px no-repeat,
+    radial-gradient(circle, #fff 2px, transparent 3px) 15% 85% / 5px 5px no-repeat,
+    radial-gradient(circle, #fff 2px, transparent 3px) 0 50% / 5px 5px no-repeat,
+    radial-gradient(circle, #fff 2px, transparent 3px) 15% 15% / 5px 5px no-repeat;
+  animation: particle-orbit 900ms linear infinite;
+}
+
+.particle-loader[hidden] {
+  display: none;
+}
+
+@keyframes particle-orbit {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .particle-loader { animation-duration: 2.5s; }
+}
+
+.auth-error-dialog {
+  width: min(390px, calc(100% - 32px));
+  padding: 28px;
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 18px;
+  background: var(--panel-raised);
+  color: var(--text);
+  box-shadow: 0 24px 75px rgba(0,0,0,.5);
+}
+
+.auth-error-dialog::backdrop {
+  background: rgba(2, 5, 12, .78);
+  backdrop-filter: blur(4px);
+}
+
+.auth-error-dialog h2 {
+  margin: 0 0 12px;
+  font-size: 21px;
+}
+
+.auth-error-dialog p {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.modal-close {
+  width: 100%;
+  min-height: 44px;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.modal-close:hover { background: var(--accent-hover); }
+.modal-close:focus-visible { outline: 3px solid white; outline-offset: 3px; }
 
 .google-button {
   display: grid;

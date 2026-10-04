@@ -72,8 +72,12 @@
   movementSearch.addEventListener("input", () => renderer.renderMovements(movementSearch.value, data.periods[dateRange.value].multiplier));
   globalSearch.addEventListener("input", () => { movementSearch.value = globalSearch.value; renderer.renderMovements(globalSearch.value, data.periods[dateRange.value].multiplier); });
   document.querySelector("#export-button").addEventListener("click", exportCsv);
-  document.querySelector(".logout-button").addEventListener("click", () => {
-    window.location.assign("/iniciar-sesion");
+  document.querySelector(".logout-button").addEventListener("click", async () => {
+    try {
+      await fetch("/auth/logout", { method: "POST", credentials: "same-origin" });
+    } finally {
+      window.location.assign("/iniciar-sesion");
+    }
   });
   themeToggle.addEventListener("click", () => {
     const lightMode = document.documentElement.dataset.theme !== "light";

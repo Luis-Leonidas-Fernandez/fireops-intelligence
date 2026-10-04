@@ -8,6 +8,9 @@ Un ADR documenta una decisión concreta, su contexto, alternativas y consecuenci
 | [ADR-002](ADR-002-database-persistence.md) | Registro retrospectivo del estado actual | PostgreSQL, SQLAlchemy asíncrono y Alembic |
 | [ADR-003](ADR-003-frontend-architecture.md) | Registro retrospectivo del estado actual | Web HTML/CSS/JS servida por FastAPI; React diferido |
 | [ADR-004](ADR-004-testing-database-isolation.md) | **Propuesto; no implementado** | Transacción, SAVEPOINT y rollback por test de Task 06 |
+| [ADR-005](ADR-005-email-password-authentication.md) | Aceptado; implementado | Registro/login con Argon2, JWT en cookie y límites de autorización |
+
+El mecanismo de transacción/SAVEPOINT ya existe en la fixture de **autenticación**; ADR-004 sigue propuesto para los tests de **Task 06**. No confundir esos alcances.
 
 ## Convención para próximos ADR
 

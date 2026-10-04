@@ -1,6 +1,7 @@
-from functools import lru_cache
 import os
+from functools import lru_cache
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -11,7 +12,7 @@ class Settings(BaseSettings):
     app_name: str = "FireOps Intelligence"
     environment: str = "development"
     database_url: str
-    secret_key: str
+    secret_key: str = Field(min_length=32)
 
     model_config = SettingsConfigDict(
         # Lee .env por defecto o el archivo indicado por ENV_FILE.

@@ -4,12 +4,12 @@ Este índice distingue el **sistema que existe** de las **decisiones que lo expl
 
 ## Estado actual
 
-- [Backend](backend/backend-architecture.md): FastAPI, routers de inventario, schemas, sesiones y endpoints registrados.
-- [Frontend](frontend/frontend-architecture.md): páginas HTML/CSS/JS, datos de demostración, navegación y límites de autenticación.
+- [Backend](backend/backend-architecture.md): FastAPI, inventario, autenticación, persistencia y endpoints registrados.
+- [Frontend](frontend/frontend-architecture.md): páginas HTML/CSS/JS, formularios conectados y datos de demostración.
 
 ## Decisiones
 
-El [índice de ADR](adr/README.md) reúne registros concretos. ADR-001, ADR-002 y ADR-003 documentan decisiones observables en el código actual; ADR-004 es una **propuesta** para la Task 06, no una fixture ya disponible.
+El [índice de ADR](adr/README.md) reúne registros concretos. ADR-001, ADR-002, ADR-003 y ADR-005 documentan decisiones observables en el código actual. ADR-004 sigue siendo una **propuesta para Task 06**, aunque la suite de autenticación ya usa una fixture transaccional de alcance propio.
 
 ## Diagramas
 

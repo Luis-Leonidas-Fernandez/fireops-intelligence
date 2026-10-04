@@ -1,12 +1,12 @@
 # ADR-004 — Aislamiento transaccional para pruebas de inventario
 
-- **Estado:** propuesto; **no implementado todavía**.
+- **Estado:** propuesto para Task 06; el patrón ya está implementado solo en la suite de autenticación.
 - **Fecha de registro:** 2026-10-03.
 - **Alcance inicial:** tests de lectura de bienes de la Task 06. Extender a los tests existentes requerirá trabajo adicional.
 
 ## Contexto
 
-Los tests actuales de creación llaman a la API con `ASGITransport` y crean registros en `fireassets_test`. `get_database_session` abre sesiones nuevas y los endpoints hacen `session.commit()`, de modo que quedan filas confirmadas. Por eso, un test que espera `GET /inventory/assets/` igual a `[]` no puede depender de que la base esté vacía ni del orden de ejecución.
+Los tests de inventario existentes llaman a la API con `ASGITransport` y crean registros en `fireassets_test`. `get_database_session` abre sesiones nuevas y los endpoints hacen `session.commit()`, de modo que pueden quedar filas confirmadas. Por eso, un test que espera `GET /inventory/assets/` igual a `[]` no puede depender de que la base esté vacía ni del orden de ejecución.
 
 ## Estrategia propuesta
 
@@ -22,8 +22,8 @@ Dentro de esa transacción se puede establecer un estado inicial sin bienes para
 
 ## Consecuencias y aceptación
 
-La fixture debe verificar aislamiento ejecutando tests individualmente, en conjunto y en otro orden. Un Test A crea bienes y los consulta; al terminar, Test B solicita la lista y obtiene `200` y `[]` sin borrado manual posterior. **Ninguna de estas garantías existe todavía en la suite actual.** La implementación pedagógica y los casos exactos están en [Task 06](../../../labs/TASK_06_GET_ASSET_BY_ID.md).
+La fixture futura de Task 06 debe verificar aislamiento ejecutando tests individualmente, en conjunto y en otro orden. Un Test A crea bienes y los consulta; al terminar, Test B solicita la lista y obtiene `200` y `[]` sin borrado manual posterior. **Estas garantías aún no existen para los tests de inventario.** Como referencia implementada, `tests/modules/auth/conftest.py` ya comprueba `fireassets_test`, comparte una sesión con FastAPI mediante `dependency_overrides`, usa `join_transaction_mode="create_savepoint"` y revierte la transacción exterior por test; no limpia las filas antiguas de inventario ni sustituye la fixture pendiente de Task 06. La implementación pedagógica y los casos exactos están en [Task 06](../../../labs/TASK_06_GET_ASSET_BY_ID.md).
 
 ## Evidencia
 
-`app/infrastructure/database/session.py`, `tests/modules/inventory/test_asset_endpoints.py`, `tests/modules/inventory/test_category_endpoints.py` y `labs/TASK_06_GET_ASSET_BY_ID.md`. Actualmente `tests/modules/inventory/test_get_asset_endpoint.py` está vacío.
+`app/infrastructure/database/session.py`, `tests/modules/inventory/test_asset_endpoints.py`, `tests/modules/inventory/test_category_endpoints.py`, `tests/modules/auth/conftest.py` y `labs/TASK_06_GET_ASSET_BY_ID.md`. Actualmente `tests/modules/inventory/test_get_asset_endpoint.py` está vacío.

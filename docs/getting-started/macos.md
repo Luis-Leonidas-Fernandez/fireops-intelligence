@@ -1,6 +1,6 @@
 # Run FireOps Intelligence on macOS
 
-This guide starts the current FastAPI API and Fire Control frontend against **`fireassets_test`**. The root URL currently shows the dashboard demo; sign-in is a separate, unprotected visual page at `/iniciar-sesion`.
+This guide starts the FastAPI API and Fire Control frontend against **`fireassets_test`**. Without a valid session, `/` redirects to `/iniciar-sesion`.
 
 ## Prerequisites
 
@@ -30,6 +30,8 @@ Edit `.env.test`. Keep `APP_NAME`, `ENVIRONMENT` and `SECRET_KEY` appropriate fo
 DATABASE_URL=postgresql+asyncpg://YOUR_USER:YOUR_PASSWORD@localhost:5432/fireassets_test
 ```
 
+Replace the example `SECRET_KEY` with a **different, random value of at least 32 characters** in every environment. Generate one locally with `./.venv/bin/python -c 'import secrets; print(secrets.token_urlsafe(48))'`; copy its output into `.env.test` as `SECRET_KEY=...`. Never commit the value or share it with the team. A short key now prevents settings validation.
+
 A local installation may use passwordless authentication or a different username. Do not commit `.env.test`; it is ignored by Git. If you also need a normal `.env`, keep it separate and do not use it for these test-database commands.
 
 Check whether the test database exists:
@@ -46,7 +48,7 @@ If the output is empty, create it with `createdb fireassets_test` (add the appro
 ENV_FILE=.env.test ./.venv/bin/python -m alembic upgrade head
 ```
 
-Do **not** run `alembic init`: this repository already contains `alembic.ini`, `migrations/env.py` and migration `0374d9a573a1` for `categorias` and `bienes`.
+Do **not** run `alembic init`: this repository already contains Alembic configuration, migration `0374d9a573a1` for `categorias`/`bienes` and migration `b70e8e0479aa` for `usuarios`. `upgrade head` applies every missing revision; no database content travels through Git.
 
 ## Daily start
 
@@ -58,23 +60,31 @@ The script uses `.venv` automatically, checks that `.env.test` names `fireassets
 
 | Address | Purpose |
 |---|---|
-| `http://127.0.0.1:8000/` | Dashboard demo; this is the clickable Uvicorn address |
-| `http://127.0.0.1:8000/iniciar-sesion` | Sign-in visual demo |
-| `http://127.0.0.1:8000/registro` | Registration visual demo |
+| `http://127.0.0.1:8000/` | Dashboard demo; redirects to sign-in without a valid cookie |
+| `http://127.0.0.1:8000/iniciar-sesion` | Sign in with registered email and password |
+| `http://127.0.0.1:8000/registro` | Create an account with email and password |
 | `http://127.0.0.1:8000/docs` | Implemented API endpoints in Swagger UI |
 | `http://127.0.0.1:8000/health` | Health response |
 
-The account-page buttons navigate to `/` without credential validation. “Cerrar sesión” returns to `/iniciar-sesion`, but no real session exists.
+Registration and sign-in set an HttpOnly session cookie; the browser sends it automatically. “Cerrar sesión” calls `POST /auth/logout`, clears that cookie and returns to sign-in. Google is **not implemented** and cannot be used to enter. The inventory API is not yet authorization-protected.
 
 ## Tests
 
-With `.venv` activated (`source .venv/bin/activate`) and `.env.test` verified, `./scripts/task05_run_tests_mac.sh` applies migrations and runs pytest. This older test script uses the current `python` command and does **not** independently reject a wrong database name; check `.env.test` first. The Task 06 listing/get-by-ID implementation and its tests are still pending.
+After verifying `.env.test` targets `fireassets_test` and applying migrations, run:
+
+```bash
+ENV_FILE=.env.test ./.venv/bin/python -m pytest -q
+node --test frontend/tests/auth-form.test.cjs
+```
+
+Node.js is needed only for the frontend tests. The backend auth fixture checks `SELECT current_database()` and rejects any database other than `fireassets_test`; other project tests may have different safeguards. `./scripts/task05_run_tests_mac.sh` remains available for its older class exercise, but uses the active `python` and does not independently validate the database name. Task 06 listing/get-by-ID remains pending.
 
 ## Troubleshooting
 
 - `No module named alembic`: install requirements into `.venv` and use `./.venv/bin/python` (not the system Python).
 - Connection refused: start PostgreSQL and confirm host/port in `.env.test`.
 - Authentication failed: confirm PostgreSQL user/password and URL encoding for reserved password characters.
+- `SECRET_KEY` validation error: replace the example value with a random key of at least 32 characters.
 - Port 8000 in use: stop the other Uvicorn process before running `test-up.sh`.
 - Dashboard looks stale in Brave: reload the page. FastAPI sends `Cache-Control: no-store` for frontend HTML/CSS/JS, and dashboard assets use versioned URLs.
 

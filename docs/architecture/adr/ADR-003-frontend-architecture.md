@@ -13,19 +13,21 @@ El equipo ya dispone de endpoints FastAPI y necesita visualizar el proyecto sin 
 
 Se conserva la interfaz actual en `frontend/` y FastAPI la sirve junto con la API desde `127.0.0.1:8000`: dashboard en `/`, registro en `/registro` e inicio de sesión en `/iniciar-sesion`. Los archivos CSS y JS se sirven desde `/css/*` y `/js/*`. El dashboard consulta `GET /health` y `GET /inventory/categories` para el indicador de conexión y el conteo de categorías. Las demás cifras, tablas, alertas, movimientos y exportación CSV son ilustrativos.
 
-Para evitar que Brave combine HTML nuevo con scripts antiguos, las respuestas HTML/CSS/JS del frontend usan `Cache-Control: no-store`; el dashboard referencia además sus assets con una versión en la URL. Hay estilos responsive y un control de modo oscuro/claro en la página actual; la preferencia no se persiste.
+Registro e inicio de sesión ahora comparten el controlador `frontend/js/auth-form.js` y las reglas cliente de `frontend/js/validations/credentials.js`. Envían credenciales a la API del mismo origen, muestran carga, feedback o errores y solo redirigen tras éxito. FastAPI exige una cookie de acceso válida antes de servir `/`; [ADR-005](ADR-005-email-password-authentication.md) registra el mecanismo y sus límites.
+
+Para evitar que Brave combine HTML nuevo con scripts antiguos, las respuestas HTML/CSS/JS del frontend y `/auth/*` usan `Cache-Control: no-store`; el dashboard referencia además sus assets con una versión en la URL. Hay estilos responsive y un control de modo oscuro/claro en la página actual; la preferencia no se persiste.
 
 ## Alternativas consideradas
 
 | Opción | Situación |
 |---|---|
-| React + Vite + TypeScript | Propuesta diferida para una futura interfaz operativa con estado, formularios y rutas reales; no existe en este repositorio. |
+| React + Vite + TypeScript | Propuesta diferida para una futura interfaz operativa más compleja; no existe en este repositorio. Los formularios actuales funcionan con JavaScript sin framework. |
 | Segundo servidor estático local | Innecesario para la demo actual porque FastAPI ya sirve ambos lados en el mismo origen. |
 | Astro o Flutter | No seleccionados para esta interfaz local. |
 
 ## Consecuencias y límites
 
-No hay autenticación. Los formularios y el botón de Google navegan al dashboard sin enviar ni validar credenciales; «Cerrar sesión» navega a `/iniciar-sesion` sin invalidar una sesión. El dashboard puede abrirse directamente en `/`. Estas pantallas no protegen datos ni implementan OAuth. La decisión sobre un frontend operativo debe revisarse cuando existan requisitos y contratos API reales para reemplazar los datos ficticios.
+Hay autenticación local por correo y contraseña. El botón de Google sigue visible pero **no implementa OAuth**: muestra un aviso y no abre el dashboard. «Cerrar sesión» solicita `/auth/logout` para borrar la cookie; el frontend redirige aunque la petición falle, por lo que ese borrado no está garantizado en caso de error de red. La ruta `/` exige token válido, pero la API de inventario y `/docs` todavía no exigen autorización; el JWT no tiene revocación inmediata del lado del servidor. Las métricas del dashboard siguen siendo demostrativas.
 
 ## Evidencia
 

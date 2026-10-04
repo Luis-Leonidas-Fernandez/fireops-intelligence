@@ -20,6 +20,7 @@ if config.config_file_name is not None:
 from app.config.settings import get_settings
 from app.infrastructure.database.base import Base
 from app.modules.inventory.shared import models  # noqa: F401
+from app.modules.auth import models as auth_models  # noqa: F401
 
 settings = get_settings()
 config.set_main_option("sqlalchemy.url", settings.database_url)

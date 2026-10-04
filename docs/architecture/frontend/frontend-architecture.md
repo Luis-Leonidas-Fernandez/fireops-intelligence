@@ -1,26 +1,28 @@
 # Arquitectura actual del frontend
 
-La web actual es una demostración en HTML/CSS/JavaScript sin framework ni compilación. FastAPI la sirve en el mismo origen que la API. [ADR-003](../adr/ADR-003-frontend-architecture.md) explica esta elección provisional.
+La web usa HTML/CSS/JavaScript sin framework ni compilación. FastAPI la sirve en el mismo origen que la API. El dashboard contiene datos de demostración, pero el registro y el acceso con correo/contraseña están conectados al backend. [ADR-003](../adr/ADR-003-frontend-architecture.md) explica la elección tecnológica provisional; [ADR-005](../adr/ADR-005-email-password-authentication.md) documenta la autenticación.
 
 ## Páginas y recursos
 
 | Ruta | Archivo | Responsabilidad |
 |---|---|---|
-| `/` | `frontend/index.html` | Dashboard de demostración |
-| `/registro` | `frontend/pages/registro/index.html` | Formulario visual de registro |
-| `/iniciar-sesion` | `frontend/pages/iniciar-sesion/index.html` | Formulario visual de acceso |
+| `/` | `frontend/index.html` | Dashboard de demostración, servido solo con cookie válida |
+| `/registro` | `frontend/pages/registro/index.html` | Registro con correo y contraseña |
+| `/iniciar-sesion` | `frontend/pages/iniciar-sesion/index.html` | Acceso con correo y contraseña |
 | `/css/*`, `/js/*` | `frontend/css/`, `frontend/js/` | Estilos y comportamiento |
 
 `frontend/js/data.js` contiene métricas ilustrativas; `render.js` las dibuja; `app.js` conecta los controles, el CSV de demostración, el cambio claro/oscuro y el indicador de API. Solo `GET /health` y `GET /inventory/categories` alimentan ese indicador y el conteo de categorías. El resto de tarjetas, movimientos y alertas no consulta bienes reales.
 
 ## Navegación y seguridad
 
-Registro e inicio de sesión navegan a `/` al enviar el formulario o pulsar Google, sin petición de autenticación ni validación de credenciales. «Cerrar sesión» navega a `/iniciar-sesion`; no existe sesión de usuario que cerrar. La ruta `/` sigue accesible directamente. **La navegación no equivale a autorización.**
+`frontend/js/validations/credentials.js` normaliza y valida correo y contraseña antes del envío. `frontend/js/auth-form.js` reutiliza el flujo de ambos formularios: errores de campo, botón deshabilitado y animación durante la petición, mensaje de éxito o modal con `error.code` y `error.message` del backend. Registro llama a `POST /auth/register`; login a `POST /auth/login`, ambos con `credentials: "same-origin"`. Tras éxito redirigen a `/`; un error no redirige. El servidor vuelve a validar y establece la cookie HttpOnly, que JavaScript no lee. El botón de Google abre un aviso de función no disponible: **no autentica**.
+
+`frontend/js/app.js` llama a `POST /auth/logout` y después navega a `/iniciar-sesion`. Si falta una cookie válida, el servidor responde `303` en `/`. Esto protege la página, **no autoriza** los endpoints de inventario. Cuando la petición de logout llega al servidor, la respuesta elimina la cookie; si falla la red, el frontend igualmente navega al inicio de sesión y no puede garantizar que la cookie se haya eliminado. Un JWT previamente copiado no se revoca antes de vencer.
 
 El botón de brillo cambia `html[data-theme]` entre oscuro y claro mientras la página está abierta. La elección no se guarda tras recargar. Hay CSS adaptativo para escritorio y móvil; las etiquetas del sidebar siguen siendo vistas ilustrativas, no rutas adicionales implementadas.
 
 ## Entrega local y caché
 
-`app/main.py` sirve la web y la API en `127.0.0.1:8000`. Las respuestas de HTML/CSS/JS del frontend usan `Cache-Control: no-store` y el dashboard enlaza assets versionados para evitar copias antiguas en Brave. `scripts/test-up.sh` y `scripts/test-up.ps1` levantan el servidor con `fireassets_test`, pero no ejecutan migraciones.
+`app/main.py` sirve la web y la API en `127.0.0.1:8000`. Las respuestas de HTML/CSS/JS y `/auth/*` usan `Cache-Control: no-store`; el dashboard enlaza assets versionados para evitar copias antiguas en Brave. `scripts/test-up.sh` y `scripts/test-up.ps1` levantan el servidor con `fireassets_test`, pero no ejecutan migraciones. Los tests del formulario usan `node --test frontend/tests/auth-form.test.cjs` sin instalar un framework JS.
 
 Véase [guía del frontend](../../../frontend/README.md) y [estado del proyecto](../../PROGRESS.md).

@@ -33,6 +33,8 @@ DATABASE_URL=postgresql+asyncpg://postgres:YOUR_PASSWORD@localhost:5432/fireasse
 
 If the password has URL-reserved characters, URL-encode them. Do not commit `.env.test`; Git ignores it. The normal `.env`, if used, is separate and may name a different database.
 
+Replace the example `SECRET_KEY` with a **different, random value of at least 32 characters** in each environment. Generate one locally with `& .\.venv\Scripts\python.exe -c "import secrets; print(secrets.token_urlsafe(48))"`; copy its output into `.env.test` as `SECRET_KEY=...`. Do not commit or share the key. A short value fails settings validation.
+
 Check whether the test database already exists. This is a PowerShell command; do not type raw SQL at the `PS>` prompt:
 
 ```powershell
@@ -58,7 +60,7 @@ finally {
 }
 ```
 
-Do **not** run `alembic init`: this repository already includes the Alembic setup and migration `0374d9a573a1` for `categorias` and `bienes`.
+Do **not** run `alembic init`: this repository already includes Alembic, migration `0374d9a573a1` for `categorias`/`bienes` and migration `b70e8e0479aa` for `usuarios`. `upgrade head` applies missing revisions. Git does not transfer database tables or rows.
 
 ## Daily start
 
@@ -77,23 +79,42 @@ Set-ExecutionPolicy -Scope Process RemoteSigned
 
 | Address | Purpose |
 |---|---|
-| `http://127.0.0.1:8000/` | Dashboard demo; this is the clickable Uvicorn address |
-| `http://127.0.0.1:8000/iniciar-sesion` | Sign-in visual demo |
-| `http://127.0.0.1:8000/registro` | Registration visual demo |
+| `http://127.0.0.1:8000/` | Dashboard demo; redirects to sign-in without a valid cookie |
+| `http://127.0.0.1:8000/iniciar-sesion` | Sign in with registered email and password |
+| `http://127.0.0.1:8000/registro` | Create an account with email and password |
 | `http://127.0.0.1:8000/docs` | Implemented API endpoints in Swagger UI |
 | `http://127.0.0.1:8000/health` | Health response |
 
-The account-page buttons navigate to `/` without credential validation. “Cerrar sesión” returns to `/iniciar-sesion`, but no real session exists. `/` is not access-protected.
+Registration and sign-in set an HttpOnly session cookie; the browser sends it automatically. “Cerrar sesión” calls `POST /auth/logout`, clears the cookie and returns to sign-in. Google is **not implemented** and cannot be used to enter. The inventory API is not yet authorization-protected.
 
 ## Tests
 
-With `.venv` active and `.env.test` verified, `.\scripts\task05_run_tests_windows.ps1` applies migrations and runs pytest. This older test script uses the current `python` command and does **not** independently reject a wrong database name; check your environment first. Task 06 asset listing/get-by-ID and its tests are still pending.
+After verifying `.env.test` targets `fireassets_test` and applying migrations, run the backend tests with the environment variable scoped to this block:
+
+```powershell
+$previousEnvFile = $env:ENV_FILE
+try {
+    $env:ENV_FILE = ".env.test"
+    & .\.venv\Scripts\python.exe -m pytest -q
+}
+finally {
+    if ($null -eq $previousEnvFile) {
+        Remove-Item Env:ENV_FILE -ErrorAction SilentlyContinue
+    } else {
+        $env:ENV_FILE = $previousEnvFile
+    }
+}
+node --test frontend/tests/auth-form.test.cjs
+```
+
+Node.js is needed only for the frontend tests. The backend auth fixture checks `SELECT current_database()` and rejects any database other than `fireassets_test`; other tests may have different safeguards. `.\scripts\task05_run_tests_windows.ps1` remains for the older class exercise but uses the active `python` and does not independently validate the database name. Task 06 listing/get-by-ID remains pending.
 
 ## Troubleshooting
 
 - `No module named alembic`: install requirements into `.venv` and use its `python.exe`.
 - Connection refused: check `Get-Service *postgres*`, host and port.
 - Password authentication failed: use the PostgreSQL password for the configured user; do not type it as a standalone PowerShell command.
+- `SECRET_KEY` validation error: replace the example with a random key of at least 32 characters.
 - `psql` not found: use the full path to `psql.exe` or fix `Path`, then reopen PowerShell.
 - Port 8000 in use: stop the other Uvicorn process before starting `test-up.ps1`.
 - Browser shows an old dashboard: reload; FastAPI sends `Cache-Control: no-store` for frontend HTML/CSS/JS and uses versioned dashboard assets.
