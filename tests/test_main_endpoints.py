@@ -22,7 +22,7 @@ async def test_root_serves_frontend() -> None:
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/html")
     assert "Fire Control — Inventario general" in response.text
-    assert 'src="js/app.js?v=20261003-light-theme"' in response.text
+    assert 'src="js/app.js?v=20261004-google-auth"' in response.text
     assert response.headers["cache-control"] == "no-store"
 
 

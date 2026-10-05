@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="asset/profile.png" alt="FireOps Intelligence banner" width="100%">
+</p>
+
 # FireOps Intelligence
 
 FireOps Intelligence is a learning project for a fire-department inventory API. **Fire Control** is the name shown by its current web demo. The backend uses FastAPI, SQLAlchemy and PostgreSQL; FastAPI also serves a small HTML/CSS/JavaScript interface.
@@ -7,10 +11,10 @@ FireOps Intelligence is a learning project for a fire-department inventory API. 
 | Available now | Not implemented yet |
 |---|---|
 | `POST /inventory/categories`, `GET /inventory/categories`, `POST /inventory/assets` | Listing assets and getting an asset by ID (Task 06) |
-| PostgreSQL migration for `categorias` and `bienes` | Real registration, sign-in, Google OAuth or authorization |
-| Dashboard, registration and sign-in **visual demos** | Live dashboard metrics, movements, alerts, CSV from real inventory data |
+| PostgreSQL migrations for inventory and users; email/password and Google sign-in; authenticated account profile | Authorization for inventory endpoints and invitation-only registration |
+| Dashboard demo with connected account pages | Live dashboard metrics, movements, alerts, CSV from real inventory data |
 
-The dashboard's figures are illustrative. Its API indicator and category count read `GET /health` and `GET /inventory/categories`; they do not turn the other widgets into live data. Registration/sign-in buttons navigate to the dashboard **without validating or storing credentials**. “Cerrar sesión” returns to the sign-in page; it does not invalidate a session. Do not use these screens as access control.
+The dashboard's figures are illustrative. Its API indicator and category count read `GET /health` and `GET /inventory/categories`; they do not turn the other widgets into live data. The app bar reads `GET /auth/me` and shows the signed-in user's display name or email, not a sample identity. Registration/sign-in use the backend and set a 30-minute HttpOnly session cookie. Google OAuth runs server-side when configured, with explicit linking for existing password accounts. “Cerrar sesión” requests cookie removal. **Inventory API endpoints are not yet authorization-protected.**
 
 ## Quick start with the test database
 
@@ -30,13 +34,14 @@ These scripts use the Python interpreter in `.venv`, set `ENV_FILE=.env.test` fo
 
 | URL | What it currently serves |
 |---|---|
-| `/` | Dashboard demo (the server link opens this page) |
-| `/iniciar-sesion` | Sign-in visual demo |
-| `/registro` | Registration visual demo |
+| `/` | Dashboard demo with a valid session; otherwise redirects to sign-in |
+| `/iniciar-sesion` | Email/password or Google sign-in |
+| `/registro` | Email/password or Google registration |
 | `/docs` | Swagger UI for implemented API endpoints |
+| `/auth/me` | Current authenticated user's ID, email and optional display name; `401` without a valid session |
 | `/health` | `{"status":"ok"}` |
 
-**Important:** `/` still opens the dashboard directly; the sign-in screen does not protect it. Opening the server link at sign-in instead is a separate pending routing change.
+**Important:** `/` requires a valid cookie, but this does not authorize the inventory API. For Google setup, see the [Google OAuth guide](docs/getting-started/google-oauth.md).
 
 For first-time setup, including creation and migration of `fireassets_test`, see [macOS](docs/getting-started/macos.md) or [Windows](docs/getting-started/windows.md). Never commit `.env` or `.env.test`.
 
@@ -48,7 +53,7 @@ For first-time setup, including creation and migration of `fireassets_test`, see
 | `GET /inventory/categories` | List categories ordered by ID; `200`, including `[]` |
 | `POST /inventory/assets` | Create an asset linked to an existing category; `201` on success |
 
-The `categorias` table has a unique name. The `bienes` table has a unique internal code and a required foreign key to `categorias.id`. The single committed migration is `0374d9a573a1`. See [Task 06](labs/TASK_06_GET_ASSET_BY_ID.md) for the **planned**, not yet implemented, read endpoints.
+The `categorias` table has a unique name. The `bienes` table has a unique internal code and a required foreign key to `categorias.id`. Migration `0374d9a573a1` creates inventory tables; later revisions create users, add Google identity and add optional `display_name`. See [Task 06](labs/TASK_06_GET_ASSET_BY_ID.md) for the **planned**, not yet implemented, read endpoints.
 
 ## Repository map
 
@@ -58,13 +63,13 @@ The `categorias` table has a unique name. The `bienes` table has a unique intern
 | `app/modules/inventory/` | Inventory routers, schemas and SQLAlchemy models |
 | `app/infrastructure/database/` | Async database engine and session dependency |
 | `migrations/` | Alembic schema migration |
-| `frontend/` | Vanilla HTML/CSS/JS dashboard and account-page demos |
+| `frontend/` | Vanilla HTML/CSS/JS dashboard demo and connected account pages |
 | `scripts/` | Test-database startup and Task 05 test scripts |
 | `tests/` | API tests; Task 06 test file is currently empty |
 | `labs/` | Current and completed classroom tasks |
 | `docs/` | Progress, setup guides and architecture decisions |
 
-Start with the [documentation map](docs/README.md), then see [frontend usage](frontend/README.md), the [ADR index](docs/architecture/adr/README.md) and [project progress](docs/PROGRESS.md). The Word files under `docs/architecture-history/` are historical proposals, not the current runtime specification.
+Start with the [documentation map](docs/README.md), then see [frontend usage](frontend/README.md), the [ADR index](docs/architecture/adr/README.md) and [project progress](docs/PROGRESS.md). The converted documents under `docs/architecture/history/architecture-history/` are historical proposals, not the current runtime specification.
 
 ## Tests and limitations
 
@@ -78,9 +83,9 @@ With `.venv` active and `.env.test` pointing to `fireassets_test`, the Task 05 s
 .\scripts\task05_run_tests_windows.ps1
 ```
 
-These Task 05 scripts use the **current** `python` executable and do not independently verify the database name. Check the active environment and `.env.test` before running them. The frontend/static-route checks can be run separately with `python -m pytest -q tests/test_main_endpoints.py`.
+These Task 05 scripts use the **current** `python` executable and do not independently verify the database name. Check the active environment and `.env.test` before running them. The frontend/static-route checks can be run separately with `python -m pytest -q tests/test_main_endpoints.py`; from the repository root, `node --test` discovers the dependency-free frontend tests on macOS and Windows.
 
-The current interface is a prototype, not an authenticated application or a live operational inventory. React + Vite + TypeScript was proposed for a future internal frontend but is **not** the implementation in this repository today.
+The account pages authenticate, but the inventory API remains public and dashboard metrics remain illustrative. React + Vite + TypeScript was proposed for a future internal frontend but is **not** the implementation in this repository today.
 
 ## Longer-term direction
 

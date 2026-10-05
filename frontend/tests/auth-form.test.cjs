@@ -24,12 +24,13 @@ class Element {
   querySelector(selector) { return this.children?.[selector] || null; }
 }
 
-function harness(mode = 'login') {
+function harness(mode = 'login', search = '') {
   const form = new Element();
   const button = new Element();
   const label = new Element();
   const loader = new Element();
   const status = new Element();
+  const displayName = new Element();
   const email = new Element();
   const password = new Element();
   const repeatPassword = new Element();
@@ -37,21 +38,23 @@ function harness(mode = 'login') {
   const dialogMessage = new Element();
   const closeButton = new Element();
   const googleButton = new Element();
-  const errors = Object.fromEntries(['email', 'password', 'repeatPassword'].map((key) => [key, new Element()]));
+  const errors = Object.fromEntries(['displayName', 'email', 'password', 'repeatPassword'].map((key) => [key, new Element()]));
   button.children = { '.button-label': label, '.particle-loader': loader };
   form.children = {
     '.submit-button': button, '.form-status': status,
+    '#display-name': mode === 'register' ? displayName : null,
     '#email': email, '#password': password,
     '#password-repeat': mode === 'register' ? repeatPassword : null,
     ...Object.fromEntries(Object.entries(errors).map(([key, element]) => [`[data-error-for="${key}"]`, element])),
   };
   dialog.children = { '.modal-message': dialogMessage, '.modal-close': closeButton };
 
-  const location = { path: null, assign(value) { this.path = value; } };
+  const location = { path: null, search, pathname: mode === 'login' ? '/iniciar-sesion' : '/registro', assign(value) { this.path = value; } };
   let callback;
   let requests = 0;
+  let lastRequest;
   let fetchResult = async () => ({ ok: true, json: async () => ({ message: 'Correcto.' }) });
-  const window = { location, setTimeout(fn) { callback = fn; } };
+  const window = { location, history: { replaceState(_state, _title, path) { location.cleanedPath = path; } }, setTimeout(fn) { callback = fn; } };
   const document = {
     querySelector(selector) {
       if (selector === '#auth-error-dialog') return dialog;
@@ -60,8 +63,8 @@ function harness(mode = 'login') {
     },
     querySelectorAll() { return []; },
   };
-  const context = { window, document, HTMLInputElement: Element,
-    fetch: (...args) => { requests += 1; return fetchResult(...args); } };
+  const context = { window, document, HTMLInputElement: Element, URLSearchParams,
+    fetch: (...args) => { requests += 1; lastRequest = args; return fetchResult(...args); } };
   for (const file of ['js/validations/credentials.js', 'js/auth-form.js']) {
     vm.runInNewContext(fs.readFileSync(path.join(frontend, file), 'utf8'), context);
   }
@@ -70,9 +73,10 @@ function harness(mode = 'login') {
   password.value = 'ClaveSegura123';
   repeatPassword.value = password.value;
   return {
-    window, form, button, label, loader, status, email, password, repeatPassword,
+    window, form, button, label, loader, status, displayName, email, password, repeatPassword,
     dialog, dialogMessage, closeButton, googleButton, errors, location,
     get requests() { return requests; },
+    get lastRequest() { return lastRequest; },
     respondWith(fn) { fetchResult = fn; },
     redirect() { callback?.(); },
     submit() { return form.listeners.submit({ preventDefault() {} }); },
@@ -123,20 +127,44 @@ test('server error opens closable modal and never redirects', async () => {
   assert.equal(ui.dialog.open, false);
 });
 
-test('Google button does not bypass authentication', () => {
+test('Google button starts server-side OAuth without granting a local session', () => {
   const ui = harness();
   ui.googleButton.listeners.click();
-  assert.equal(ui.dialog.dataset.errorCode, 'GOOGLE_NOT_AVAILABLE');
-  assert.equal(ui.location.path, null);
+  assert.equal(ui.location.path, '/auth/google/start?flow=signin&source=login');
+  assert.equal(ui.googleButton.disabled, true);
+  assert.equal(ui.googleButton.attributes['aria-busy'], 'true');
+});
+
+test('registration Google button preserves its source', () => {
+  const ui = harness('register');
+  ui.googleButton.listeners.click();
+  assert.equal(ui.location.path, '/auth/google/start?flow=signin&source=register');
+});
+
+test('Google callback error is shown in a controlled modal and removed from URL', () => {
+  const ui = harness('login', '?auth_error=GOOGLE_LINK_REQUIRED');
+  assert.equal(ui.dialog.open, true);
+  assert.match(ui.dialogMessage.textContent, /vinculá Google/);
+  assert.equal(ui.location.cleanedPath, '/iniciar-sesion');
 });
 
 test('valid registration submits and redirects only after success', async () => {
   const ui = harness('register');
+  ui.displayName.value = '  Ana   Pérez  ';
   await ui.submit();
   assert.equal(ui.requests, 1);
+  assert.equal(JSON.parse(ui.lastRequest[1].body).display_name, 'Ana Pérez');
   assert.equal(ui.status.dataset.state, 'success');
   ui.redirect();
   assert.equal(ui.location.path, '/');
+});
+
+test('too long display name prevents registration request', async () => {
+  const ui = harness('register');
+  ui.displayName.value = 'A'.repeat(121);
+  await ui.submit();
+  assert.equal(ui.requests, 0);
+  assert.match(ui.errors.displayName.textContent, /120/);
 });
 
 test('network failure opens an error modal without redirecting', async () => {

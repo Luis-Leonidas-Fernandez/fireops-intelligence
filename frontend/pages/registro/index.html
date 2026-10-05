@@ -36,6 +36,19 @@
 
             <form id="registration-form" novalidate>
               <div class="field-group">
+                <label for="display-name">Nombre para mostrar <span>(opcional)</span></label>
+                <input
+                  id="display-name"
+                  name="display_name"
+                  type="text"
+                  autocomplete="name"
+                  maxlength="120"
+                  placeholder="Tu nombre"
+                  aria-describedby="display-name-error"
+                />
+                <small id="display-name-error" class="field-error" data-error-for="displayName" aria-live="polite"></small>
+              </div>
+              <div class="field-group">
                 <label for="email">Correo electrónico</label>
                 <input
                   id="email"

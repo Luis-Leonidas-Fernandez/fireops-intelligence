@@ -5,9 +5,11 @@ Esta carpeta separa **cómo iniciar el proyecto**, **cómo está construido hoy*
 | Necesidad | Leer |
 |---|---|
 | Preparar el entorno | [macOS](getting-started/macos.md) o [Windows](getting-started/windows.md) |
+| Configurar acceso con Google | [Guía Google OAuth](getting-started/google-oauth.md) |
 | Entender el backend actual | [Arquitectura del backend](architecture/backend/backend-architecture.md) |
 | Entender la web actual | [Arquitectura del frontend](architecture/frontend/frontend-architecture.md) |
 | Comprender registro, login y sus límites | [ADR-005: autenticación](architecture/adr/ADR-005-email-password-authentication.md) |
+| Configurar el nombre de perfil y el app bar | [Arquitectura del frontend](architecture/frontend/frontend-architecture.md) y [backend](architecture/backend/backend-architecture.md) |
 | Revisar decisiones y propuestas | [Índice de ADR](architecture/adr/README.md) |
 | Conocer el alcance y los pendientes | [Progreso](PROGRESS.md) y [Task 06](../labs/TASK_06_GET_ASSET_BY_ID.md) |
 
@@ -21,7 +23,7 @@ Esta carpeta separa **cómo iniciar el proyecto**, **cómo está construido hoy*
 
 El [README principal](../README.md) ofrece el resumen del repositorio. Las guías de clase terminadas están en `labs/completed/`; la Task 06 sigue en `labs/` porque está pendiente.
 
-**Estado de acceso:** registro/login por correo y contraseña funcionan; `/` exige una cookie de sesión válida. Google y la autorización de los endpoints de inventario no están implementados. Las cifras del dashboard continúan siendo ilustrativas. Consulte [progreso](PROGRESS.md) para distinguir el estado del código de la aplicación de las propuestas históricas.
+**Estado de acceso:** registro/login por correo y contraseña y Google OAuth funcionan con la configuración correspondiente; `/` exige una cookie de sesión válida. `GET /auth/me` proporciona el nombre o correo autenticado al app bar. La autorización de los endpoints de inventario no está implementada. Las cifras del dashboard continúan siendo ilustrativas. Consulte [progreso](PROGRESS.md) para distinguir el estado del código de la aplicación de las propuestas históricas.
 
 ## Documentos Word convertidos
 

@@ -23,7 +23,7 @@ try {
     try {
         $env:ENV_FILE = ".env.test"
         Write-Host "Iniciando Fire Control con fireassets_test. Detené el servidor con Ctrl+C."
-        & $python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+        & $python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000 --no-access-log
         if ($LASTEXITCODE -ne 0) {
             throw "Uvicorn terminó con código $LASTEXITCODE."
         }

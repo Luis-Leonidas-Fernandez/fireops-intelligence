@@ -12,7 +12,7 @@ Una categoría debe existir antes de registrar un bien, y el código interno del
 
 PostgreSQL es el almacenamiento actual. SQLAlchemy 2 usa un motor asíncrono con `asyncpg`; `get_database_session` entrega una `AsyncSession` por dependencia de FastAPI. Alembic aplica las migraciones mediante la URL cargada por `Settings` desde `.env` o desde el archivo indicado por `ENV_FILE`.
 
-La migración `0374d9a573a1` crea `categorias` (`id`, `nombre` único) y `bienes` (`id`, `codigo_interno` único, `nombre`, `categoria_id` obligatorio con clave foránea a `categorias.id`). La revisión posterior `b70e8e0479aa` crea `usuarios` (`id`, `email` único, `password_hash`, `created_at`) para autenticación local; no agrega relaciones entre usuarios y bienes. Los endpoints de alta confirman con `session.commit()` y refrescan la instancia antes de responder; en conflicto de integridad realizan rollback y devuelven `409`.
+La migración `0374d9a573a1` crea `categorias` (`id`, `nombre` único) y `bienes` (`id`, `codigo_interno` único, `nombre`, `categoria_id` obligatorio con clave foránea a `categorias.id`). La revisión `b70e8e0479aa` crea `usuarios` para autenticación local; `c4e9f1d2a7b3` añade `google_sub` único y permite contraseña nula para cuentas creadas con Google; `d8b6e2f1940a` añade `display_name` nullable. No se agregan relaciones entre usuarios y bienes. Los endpoints de alta confirman con `session.commit()` y refrescan la instancia antes de responder; en conflicto de integridad realizan rollback y devuelven `409`.
 
 ## Alternativas y límites
 
@@ -26,4 +26,4 @@ Cada máquina necesita su propia base y migraciones aplicadas; Git solo distribu
 
 ## Evidencia
 
-`app/config/settings.py`, `app/infrastructure/database/session.py`, `app/modules/inventory/shared/models.py`, `app/modules/auth/models.py`, `migrations/env.py`, `migrations/versions/0374d9a573a1_create_categories_and_assets_tables.py` y `migrations/versions/b70e8e0479aa_create_auth_users.py`.
+`app/config/settings.py`, `app/infrastructure/database/session.py`, `app/modules/inventory/shared/models.py`, `app/modules/auth/models.py`, `migrations/env.py` y las revisiones `0374d9a573a1`, `b70e8e0479aa`, `c4e9f1d2a7b3` y `d8b6e2f1940a` en `migrations/versions/`.

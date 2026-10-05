@@ -14,8 +14,9 @@ settings = get_settings()
 #Esto crea el motor de base de datos
 engine = create_async_engine(
     settings.database_url,
-    #permite mostrar las consultas sql en terminal
-    echo=settings.environment == "development",
+    # SQL parameters can contain emails, password hashes, and provider identities.
+    echo=False,
+    hide_parameters=True,
 )
 
 #crea una fabrica de sesiones no crea la sesion es el objeto que ayuda a crearla

@@ -133,7 +133,7 @@ Estoy aprendiendo programacion. No me des la solucion completa de golpe. Guiame 
 ## Verificar que el proyecto funciona
 
 ```text
-python -m uvicorn app.main:app --reload
+python -m uvicorn app.main:app --reload --no-access-log
 ```
 
 Si levanta correctamente, abrir el navegador en http://127.0.0.1:8000/docs.

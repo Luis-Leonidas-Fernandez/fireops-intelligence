@@ -9,7 +9,9 @@ from app.shared.errors.authentication_error import AuthenticationError
 from app.shared.errors.conflict_error import ConflictError
 
 
-async def register_user(session: AsyncSession, email: str, password: str) -> User:
+async def register_user(
+    session: AsyncSession, email: str, password: str, display_name: str | None = None
+) -> User:
     existing = await session.scalar(select(User.id).where(User.email == email))
     if existing is not None:
         raise ConflictError(
@@ -17,7 +19,7 @@ async def register_user(session: AsyncSession, email: str, password: str) -> Use
         )
 
     password_hash = await run_in_threadpool(hash_password, password)
-    user = User(email=email, password_hash=password_hash)
+    user = User(email=email, password_hash=password_hash, display_name=display_name)
     session.add(user)
     try:
         await session.commit()
@@ -32,7 +34,7 @@ async def register_user(session: AsyncSession, email: str, password: str) -> Use
 
 async def authenticate_user(session: AsyncSession, email: str, password: str) -> User:
     user = await session.scalar(select(User).where(User.email == email))
-    if user is None or not await run_in_threadpool(
+    if user is None or user.password_hash is None or not await run_in_threadpool(
         verify_password, password, user.password_hash
     ):
         raise AuthenticationError(

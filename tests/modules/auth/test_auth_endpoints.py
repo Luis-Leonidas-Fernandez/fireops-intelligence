@@ -36,7 +36,7 @@ async def test_register_persists_hashed_password_and_sets_session(
     assert response.status_code == 201
     assert response.json() == {
         "message": "Cuenta creada correctamente.",
-        "user": {"id": response.json()["user"]["id"], "email": email},
+        "user": {"id": response.json()["user"]["id"], "email": email, "display_name": None},
     }
     assert dashboard.status_code == 200
     cookie = response.cookies.get(ACCESS_TOKEN_COOKIE)
@@ -177,3 +177,40 @@ async def test_logout_clears_cookie_and_dashboard_access(
     assert logout.status_code == 204
     assert dashboard.status_code == 303
     assert dashboard.headers["location"] == "/iniciar-sesion"
+
+
+@pytest.mark.asyncio
+async def test_profile_uses_session_and_registered_name(
+    auth_session: AsyncSession,
+) -> None:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        anonymous = await client.get("/auth/me")
+        assert anonymous.status_code == 401
+        registered = await client.post(
+            "/auth/register",
+            json={
+                "email": unique_email(), "password": "ClaveSegura123",
+                "display_name": "  María   Fernández  ",
+            },
+        )
+        profile = await client.get("/auth/me")
+        assert registered.status_code == 201
+        assert registered.json()["user"]["display_name"] == "María Fernández"
+        assert profile.status_code == 200
+        assert profile.json() == registered.json()["user"]
+        await client.post("/auth/logout")
+        assert (await client.get("/auth/me")).status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_existing_user_profile_falls_back_to_email(
+    auth_session: AsyncSession,
+) -> None:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        registered = await client.post(
+            "/auth/register", json={"email": unique_email(), "password": "ClaveSegura123"}
+        )
+        profile = await client.get("/auth/me")
+    assert registered.status_code == 201
+    assert profile.json()["display_name"] is None
+    assert profile.json()["email"] == registered.json()["user"]["email"]

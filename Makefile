@@ -1,7 +1,7 @@
 .PHONY: run test lint format
 
 run:
-	. .venv/bin/activate && uvicorn app.main:app --reload
+	. .venv/bin/activate && uvicorn app.main:app --reload --no-access-log
 
 test:
 	. .venv/bin/activate && pytest -v

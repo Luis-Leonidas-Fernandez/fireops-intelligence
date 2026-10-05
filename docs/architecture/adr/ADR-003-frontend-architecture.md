@@ -15,6 +15,8 @@ Se conserva la interfaz actual en `frontend/` y FastAPI la sirve junto con la AP
 
 Registro e inicio de sesión ahora comparten el controlador `frontend/js/auth-form.js` y las reglas cliente de `frontend/js/validations/credentials.js`. Envían credenciales a la API del mismo origen, muestran carga, feedback o errores y solo redirigen tras éxito. FastAPI exige una cookie de acceso válida antes de servir `/`; [ADR-005](ADR-005-email-password-authentication.md) registra el mecanismo y sus límites.
 
+El app bar no contiene una identidad de ejemplo: `frontend/js/profile.js` consulta `GET /auth/me` con la cookie local y muestra el nombre registrado o, si falta, el correo. La página de registro admite un nombre opcional; el acceso con Google puede proporcionarlo cuando el proveedor lo incluye en el ID token verificado.
+
 Para evitar que Brave combine HTML nuevo con scripts antiguos, las respuestas HTML/CSS/JS del frontend y `/auth/*` usan `Cache-Control: no-store`; el dashboard referencia además sus assets con una versión en la URL. Hay estilos responsive y un control de modo oscuro/claro en la página actual; la preferencia no se persiste.
 
 ## Alternativas consideradas
@@ -27,7 +29,7 @@ Para evitar que Brave combine HTML nuevo con scripts antiguos, las respuestas HT
 
 ## Consecuencias y límites
 
-Hay autenticación local por correo y contraseña. El botón de Google sigue visible pero **no implementa OAuth**: muestra un aviso y no abre el dashboard. «Cerrar sesión» solicita `/auth/logout` para borrar la cookie; el frontend redirige aunque la petición falle, por lo que ese borrado no está garantizado en caso de error de red. La ruta `/` exige token válido, pero la API de inventario y `/docs` todavía no exigen autorización; el JWT no tiene revocación inmediata del lado del servidor. Las métricas del dashboard siguen siendo demostrativas.
+Hay autenticación local por correo y contraseña. Desde 2026-10-04, el botón de Google inicia el flujo OAuth del backend descrito en [ADR-006](ADR-006-google-oauth-identity.md); no entrega tokens a JavaScript. «Cerrar sesión» solicita `/auth/logout` para borrar la cookie; el frontend redirige aunque la petición falle, por lo que ese borrado no está garantizado en caso de error de red. La ruta `/` exige token válido, pero la API de inventario y `/docs` todavía no exigen autorización; el JWT no tiene revocación inmediata del lado del servidor. Las métricas del dashboard siguen siendo demostrativas.
 
 ## Evidencia
 

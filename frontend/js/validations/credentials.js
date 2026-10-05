@@ -7,6 +7,11 @@
     const errors = {};
     const email = values.email.trim().toLowerCase();
     const password = values.password;
+    const displayName = mode === "register" ? (values.displayName || "").trim().replace(/\s+/g, " ") : "";
+
+    if (mode === "register" && displayName.length > 120) {
+      errors.displayName = "El nombre no puede superar los 120 caracteres.";
+    }
 
     if (!emailPattern.test(email) || email.length > 320) {
       errors.email = "Ingresá un correo electrónico válido.";
@@ -19,7 +24,7 @@
     if (mode === "register" && values.repeatPassword !== password) {
       errors.repeatPassword = "Las contraseñas no coinciden.";
     }
-    return { email, password, errors };
+    return { email, password, displayName, errors };
   }
 
   window.CredentialValidation = Object.freeze({ validateForm });

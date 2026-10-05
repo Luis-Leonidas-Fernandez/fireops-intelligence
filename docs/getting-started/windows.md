@@ -60,7 +60,7 @@ finally {
 }
 ```
 
-Do **not** run `alembic init`: this repository already includes Alembic, migration `0374d9a573a1` for `categorias`/`bienes` and migration `b70e8e0479aa` for `usuarios`. `upgrade head` applies missing revisions. Git does not transfer database tables or rows.
+Do **not** run `alembic init`: this repository already includes Alembic. `upgrade head` applies missing revisions for inventory (`0374d9a573a1`), users (`b70e8e0479aa`), Google identity (`c4e9f1d2a7b3`) and optional display name (`d8b6e2f1940a`). Git does not transfer database tables or rows.
 
 ## Daily start
 
@@ -80,12 +80,13 @@ Set-ExecutionPolicy -Scope Process RemoteSigned
 | Address | Purpose |
 |---|---|
 | `http://127.0.0.1:8000/` | Dashboard demo; redirects to sign-in without a valid cookie |
-| `http://127.0.0.1:8000/iniciar-sesion` | Sign in with registered email and password |
-| `http://127.0.0.1:8000/registro` | Create an account with email and password |
+| `http://127.0.0.1:8000/iniciar-sesion` | Sign in with email/password or configured Google OAuth |
+| `http://127.0.0.1:8000/registro` | Create an account; display name is optional |
+| `http://127.0.0.1:8000/auth/me` | Authenticated profile (`id`, email, optional display name) |
 | `http://127.0.0.1:8000/docs` | Implemented API endpoints in Swagger UI |
 | `http://127.0.0.1:8000/health` | Health response |
 
-Registration and sign-in set an HttpOnly session cookie; the browser sends it automatically. “Cerrar sesión” calls `POST /auth/logout`, clears the cookie and returns to sign-in. Google is **not implemented** and cannot be used to enter. The inventory API is not yet authorization-protected.
+Registration and sign-in set an HttpOnly session cookie; the browser sends it automatically. “Cerrar sesión” calls `POST /auth/logout`, clears the cookie and returns to sign-in. Google sign-in and explicit account linking are available after the additional setup in the [Google OAuth guide](google-oauth.md). The inventory API is not yet authorization-protected.
 
 ## Tests
 
@@ -104,7 +105,7 @@ finally {
         $env:ENV_FILE = $previousEnvFile
     }
 }
-node --test frontend/tests/auth-form.test.cjs
+node --test
 ```
 
 Node.js is needed only for the frontend tests. The backend auth fixture checks `SELECT current_database()` and rejects any database other than `fireassets_test`; other tests may have different safeguards. `.\scripts\task05_run_tests_windows.ps1` remains for the older class exercise but uses the active `python` and does not independently validate the database name. Task 06 listing/get-by-ID remains pending.

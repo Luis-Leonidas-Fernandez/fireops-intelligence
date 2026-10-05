@@ -10,6 +10,8 @@
   const toast = document.querySelector("#toast");
   const apiStatus = document.querySelector("#api-status");
   const themeToggle = document.querySelector("#brightness-toggle");
+  const profileButton = document.querySelector(".profile-button");
+  const profileMenu = document.querySelector("#profile-menu");
   let toastTimer;
 
   async function checkApiConnection() {
@@ -40,6 +42,25 @@
     toastTimer = window.setTimeout(() => toast.classList.remove("is-visible"), 2600);
   }
 
+  const authParams = new URLSearchParams(window.location.search);
+  const authCode = authParams.get("auth_error");
+  const authStatus = authParams.get("auth_status");
+  const googleMessages = {
+    GOOGLE_LINKED: "Cuenta de Google vinculada correctamente.",
+    GOOGLE_EMAIL_MISMATCH: "El correo de Google debe coincidir con el de tu cuenta.",
+    GOOGLE_ALREADY_LINKED: "Tu cuenta ya está vinculada con otra cuenta de Google.",
+    GOOGLE_ACCOUNT_CONFLICT: "Esa cuenta de Google ya está vinculada a otra persona.",
+    GOOGLE_SESSION_EXPIRED: "La autorización con Google venció. Intentá nuevamente.",
+    GOOGLE_ACCESS_DENIED: "Se canceló la vinculación con Google.",
+    GOOGLE_AUTH_FAILED: "No pudimos verificar tu cuenta de Google.",
+    GOOGLE_NOT_CONFIGURED: "El acceso con Google no está configurado en este entorno.",
+  };
+  const feedback = googleMessages[authStatus] || googleMessages[authCode];
+  if (feedback) {
+    showToast(feedback);
+    window.history.replaceState(null, "", "/");
+  }
+
   function setActiveView(view) {
     document.querySelectorAll("[data-view]").forEach(button => {
       const active = button.dataset.view === view;
@@ -65,6 +86,7 @@
   }
 
   renderer.render(dateRange.value);
+  window.DashboardProfile.mount();
   checkApiConnection();
   document.querySelector(".global-search").addEventListener("submit", event => event.preventDefault());
   document.querySelectorAll("[data-view]").forEach(button => button.addEventListener("click", () => setActiveView(button.dataset.view)));
@@ -77,6 +99,19 @@
       await fetch("/auth/logout", { method: "POST", credentials: "same-origin" });
     } finally {
       window.location.assign("/iniciar-sesion");
+    }
+  });
+  profileButton.addEventListener("click", () => {
+    profileMenu.hidden = !profileMenu.hidden;
+    profileButton.setAttribute("aria-expanded", String(!profileMenu.hidden));
+  });
+  document.querySelector("#google-link-button").addEventListener("click", () => {
+    window.location.assign("/auth/google/start?flow=link");
+  });
+  document.addEventListener("click", (event) => {
+    if (!event.target.closest(".profile-menu-wrap")) {
+      profileMenu.hidden = true;
+      profileButton.setAttribute("aria-expanded", "false");
     }
   });
   themeToggle.addEventListener("click", () => {

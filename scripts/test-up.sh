@@ -23,4 +23,4 @@ if [[ "$DB_NAME" != "fireassets_test" ]]; then
 fi
 
 echo "Iniciando Fire Control con fireassets_test. Detené el servidor con Ctrl+C."
-ENV_FILE=".env.test" "$PYTHON" -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+ENV_FILE=".env.test" "$PYTHON" -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000 --no-access-log

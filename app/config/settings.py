@@ -12,7 +12,14 @@ class Settings(BaseSettings):
     app_name: str = "FireOps Intelligence"
     environment: str = "development"
     database_url: str
-    secret_key: str = Field(min_length=32)
+    secret_key: str = Field(min_length=32, repr=False)
+    google_client_id: str | None = None
+    google_client_secret: str | None = Field(default=None, repr=False)
+    google_redirect_uri: str | None = None
+
+    @property
+    def google_oauth_enabled(self) -> bool:
+        return all((self.google_client_id, self.google_client_secret, self.google_redirect_uri))
 
     model_config = SettingsConfigDict(
         # Lee .env por defecto o el archivo indicado por ENV_FILE.
@@ -24,4 +31,5 @@ class Settings(BaseSettings):
 #Funcion para obtener todas las configuraciones actuales
 @lru_cache
 def get_settings() -> Settings:
-    return Settings()
+    # BaseSettings fills required values from the selected environment file.
+    return Settings()  # type: ignore[call-arg]

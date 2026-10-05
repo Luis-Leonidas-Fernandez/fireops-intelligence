@@ -12,11 +12,23 @@
     const dialog = document.querySelector("#auth-error-dialog");
     const dialogMessage = dialog.querySelector(".modal-message");
     const fields = {
+      displayName: form.querySelector("#display-name"),
       email: form.querySelector("#email"),
       password: form.querySelector("#password"),
       repeatPassword: form.querySelector("#password-repeat"),
     };
     let pending = false;
+    const googleErrors = {
+      GOOGLE_NOT_CONFIGURED: "El acceso con Google no está configurado en este entorno.",
+      GOOGLE_SESSION_EXPIRED: "La autorización con Google venció o no es válida. Intentá nuevamente.",
+      GOOGLE_ACCESS_DENIED: "Se canceló el acceso con Google.",
+      GOOGLE_AUTH_FAILED: "No pudimos verificar tu cuenta de Google. Intentá nuevamente.",
+      GOOGLE_LINK_REQUIRED: "Ese correo ya tiene una cuenta. Iniciá sesión con contraseña y vinculá Google desde tu perfil.",
+      GOOGLE_LOGIN_REQUIRED: "Iniciá sesión antes de vincular Google.",
+      GOOGLE_ACCOUNT_CONFLICT: "Esta cuenta de Google ya está asociada o existe un conflicto. Contactá al administrador.",
+      GOOGLE_EMAIL_MISMATCH: "El correo de Google debe coincidir con el correo de tu cuenta.",
+      GOOGLE_ALREADY_LINKED: "Tu cuenta ya está vinculada con otra cuenta de Google.",
+    };
 
     function showFieldErrors(errors) {
       Object.entries(fields).forEach(([name, input]) => {
@@ -46,6 +58,7 @@
       if (pending) return;
 
       const result = window.CredentialValidation.validateForm(mode, {
+        displayName: fields.displayName?.value,
         email: fields.email.value,
         password: fields.password.value,
         repeatPassword: fields.repeatPassword?.value,
@@ -63,7 +76,11 @@
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "same-origin",
-          body: JSON.stringify({ email: result.email, password: result.password }),
+          body: JSON.stringify({
+            email: result.email,
+            password: result.password,
+            ...(mode === "register" && result.displayName ? { display_name: result.displayName } : {}),
+          }),
         });
         const body = await response.json();
         if (!response.ok) {
@@ -82,8 +99,17 @@
       }
     });
 
-    document.querySelector(".google-button")?.addEventListener("click", () => {
-      showError("GOOGLE_NOT_AVAILABLE", "El acceso con Google todavía no está disponible. Usá tu correo y contraseña.");
+    const oauthCode = new URLSearchParams(window.location.search || "").get("auth_error");
+    if (oauthCode && Object.hasOwn(googleErrors, oauthCode)) {
+      showError(oauthCode, googleErrors[oauthCode]);
+      window.history?.replaceState(null, "", window.location.pathname);
+    }
+
+    document.querySelector(".google-button")?.addEventListener("click", (event) => {
+      const button = event?.currentTarget || document.querySelector(".google-button");
+      button.disabled = true;
+      button.setAttribute("aria-busy", "true");
+      window.location.assign(`/auth/google/start?flow=signin&source=${mode === "register" ? "register" : "login"}`);
     });
     dialog.querySelector(".modal-close").addEventListener("click", () => dialog.close());
 

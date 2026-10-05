@@ -6,12 +6,13 @@
   <meta name="description" content="Panel de demostración de inventario para Fire Control Bomberos.">
   <title>Fire Control — Inventario general</title>
   <link rel="stylesheet" href="css/tokens.css?v=20261003-light-theme">
-  <link rel="stylesheet" href="css/components.css?v=20261003-light-theme">
+  <link rel="stylesheet" href="css/components.css?v=20261004-google-auth">
   <link rel="stylesheet" href="css/layout.css?v=20261003-light-theme">
   <link rel="stylesheet" href="css/theme-light.css?v=20261003-light-theme">
   <script src="js/data.js?v=20261003-light-theme" defer></script>
   <script src="js/render.js?v=20261003-light-theme" defer></script>
-  <script src="js/app.js?v=20261003-light-theme" defer></script>
+  <script src="js/profile.js?v=20261004-profile" defer></script>
+  <script src="js/app.js?v=20261004-google-auth" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#main-content">Saltar al contenido del inventario</a>
@@ -82,11 +83,16 @@
           <button class="icon-button" type="button" aria-label="Activar modo claro" aria-pressed="false" id="brightness-toggle">☼</button>
           <button class="icon-button notification-button" type="button" aria-label="Notificaciones">♢<span></span></button>
           <span class="topbar-divider" aria-hidden="true"></span>
-          <button class="profile-button" type="button" aria-label="Abrir menú de perfil">
-            <span class="avatar" aria-hidden="true">LA</span>
-            <span class="profile-copy"><strong>Luis Admin</strong><small>Administrador de inventario</small></span>
-            <span aria-hidden="true">⌄</span>
-          </button>
+          <div class="profile-menu-wrap">
+            <button class="profile-button" type="button" aria-label="Abrir menú de perfil" aria-expanded="false" aria-controls="profile-menu">
+              <span class="avatar" id="profile-avatar" aria-hidden="true">··</span>
+              <span class="profile-copy"><strong id="profile-name">Cargando cuenta…</strong><small id="profile-email"></small></span>
+              <span aria-hidden="true">⌄</span>
+            </button>
+            <div class="profile-menu" id="profile-menu" hidden>
+              <button type="button" id="google-link-button">Vincular Google</button>
+            </div>
+          </div>
         </div>
       </header>
 

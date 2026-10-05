@@ -9,7 +9,7 @@ Este índice distingue el **sistema que existe** de las **decisiones que lo expl
 
 ## Decisiones
 
-El [índice de ADR](adr/README.md) reúne registros concretos. ADR-001, ADR-002, ADR-003 y ADR-005 documentan decisiones observables en el código actual. ADR-004 sigue siendo una **propuesta para Task 06**, aunque la suite de autenticación ya usa una fixture transaccional de alcance propio.
+El [índice de ADR](adr/README.md) reúne registros concretos. ADR-001, ADR-002, ADR-003, ADR-005 y ADR-006 documentan decisiones observables en el código actual. ADR-004 sigue siendo una **propuesta para Task 06**, aunque la suite de autenticación ya usa una fixture transaccional de alcance propio.
 
 ## Diagramas
 

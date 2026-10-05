@@ -13,8 +13,9 @@ Al finalizar una jornada, decime `cerramos la jornada`. Se agregará una nueva f
 - La **Task 06 sigue pendiente**: `app/modules/inventory/get_asset/router.py` y `tests/modules/inventory/test_get_asset_endpoint.py` están vacíos, y el router no está registrado. `GET /inventory/assets` y `GET /inventory/assets/{asset_id}` todavía no existen.
 - FastAPI sirve un dashboard HTML/CSS/JS en `/`, registro en `/registro` e inicio de sesión en `/iniciar-sesion`. Registro y acceso con correo/contraseña funcionan mediante `POST /auth/register` y `POST /auth/login`; `POST /auth/logout` borra la cookie de sesión. Sin cookie válida, `/` redirige a `/iniciar-sesion`.
 - Dashboard: diseño responsive, acento rojo, modo claro/oscuro, datos ilustrativos y conteo real de categorías. Las cifras, movimientos, alertas y CSV son demostraciones; no representan el inventario de PostgreSQL.
-- Los formularios validan los datos, muestran carga, éxito o error y solo redirigen tras una respuesta correcta. El botón de Google **no autentica**: informa que aún no está disponible. «Cerrar sesión» solicita eliminar la cookie y vuelve al inicio de sesión; si la petición falla, la navegación igualmente ocurre y el borrado no queda garantizado. Los endpoints de inventario todavía **no exigen autorización**; proteger `/` no los protege.
-- La migración `b70e8e0479aa` agrega `usuarios` (correo único y hash de contraseña). Cada integrante debe aplicarla en su base; se aplicó y verificó en `fireassets_test` de esta máquina, no se confirma el estado de otros equipos.
+- Los formularios validan los datos, muestran carga, éxito o error y solo redirigen tras una respuesta correcta. El botón Google inicia OAuth en el backend cuando el entorno está configurado; un usuario local puede vincularlo explícitamente desde su perfil. «Cerrar sesión» solicita eliminar la cookie y vuelve al inicio de sesión; si la petición falla, la navegación igualmente ocurre y el borrado no queda garantizado. Los endpoints de inventario todavía **no exigen autorización**; proteger `/` no los protege.
+- La migración `b70e8e0479aa` agrega `usuarios`; la revisión `c4e9f1d2a7b3` permite contraseña opcional y añade `google_sub` único. Ambas están aplicadas en `fireassets_test` de esta máquina; cada integrante debe migrar su propia base.
+- La revisión `d8b6e2f1940a` añade un nombre de perfil opcional y ya está aplicada en `fireassets_test` local. El app bar consulta `GET /auth/me` y muestra el nombre autenticado o, si falta, el correo; no usa un usuario ficticio. Cada integrante debe aplicar la migración en su propia base de prueba.
 - `scripts/test-up.sh` y `scripts/test-up.ps1` inician API y web con `.venv` y `.env.test`, verificando que la URL apunte a `fireassets_test`; no crean la base ni ejecutan migraciones.
 - La guía de SQLTools sigue en `vscode-tools.md`. `docs/README.md` organiza las guías, la arquitectura actual y los ADR. El aislamiento transaccional ya se implementó para los tests de autenticación; la fixture de Task 06 sigue pendiente.
 
@@ -29,12 +30,18 @@ Al finalizar una jornada, decime `cerramos la jornada`. Se agregará una nueva f
 - Se centralizaron respuestas de error de validación y HTTP bajo `error.code`, `error.message` y `error.details`; los routers de inventario existentes siguen usando sus excepciones propias.
 - Se añadió la migración `b70e8e0479aa` para `usuarios` y una fixture de autenticación que comprueba `fireassets_test`, comparte la sesión con FastAPI y hace rollback externo tras cada prueba.
 - Verificación local: `ENV_FILE=.env.test .venv/bin/python -m pytest -q` → **24 pruebas aprobadas**; `node --test frontend/tests/auth-form.test.cjs` → **6 pruebas aprobadas**. La migración se aplicó en la base local `fireassets_test`.
+- Se implementó el flujo Google OAuth de servidor, alta de usuarios Google-only, vinculación explícita con correo coincidente y retorno de errores controlados. La verificación usa firma/audiencia/emisor/vencimiento del ID token, `state`, PKCE y `nonce`; los tokens Google no se guardan. Se añadió la migración `c4e9f1d2a7b3` y la guía [Google OAuth](getting-started/google-oauth.md).
+- La migración Google se aplicó **solo a `fireassets_test` local**. Las pruebas nuevas simulan el proveedor; queda pendiente la comprobación manual completa en navegador con cuentas de prueba de Google Cloud y la migración en las máquinas del equipo.
+- Verificación posterior a Google OAuth: `ENV_FILE=.env.test .venv/bin/python -m pytest -q` → **41 pruebas aprobadas**; `node --test frontend/tests/auth-form.test.cjs` → **8 pruebas aprobadas**; Ruff y `git diff --check` sin errores.
+- Una prueba manual posterior confirmó ingreso con Google y apertura del dashboard; cancelación y vinculación aún requieren verificación manual completa. Se agregaron eventos JSON `google_oauth` con `attempt_id` sin credenciales, se desactivó el eco de SQLAlchemy y los scripts de Uvicorn usan `--no-access-log` para no registrar el código OAuth ni `state` de la URL del callback.
+- Se incorporaron `usuarios.display_name` opcional y `GET /auth/me`; el app bar muestra el nombre autenticado o el correo. El registro puede recibir un nombre y Google puede aportarlo desde el ID token verificado sin sobrescribir uno existente. Se aplicó `d8b6e2f1940a` **solo en `fireassets_test` local**.
+- Verificación más reciente: `ENV_FILE=.env.test .venv/bin/python -m pytest -q --tb=no` → **52 pruebas aprobadas**; `node --test frontend/tests/*.test.cjs` → **12 pruebas aprobadas**; `git diff --check` sin errores.
 
 #### Pendiente
 
-- Aplicar la nueva migración en las bases de los demás integrantes y configurar `SECRET_KEY` aleatoria de al menos 32 caracteres por entorno.
+- Aplicar las migraciones pendientes en las bases de los demás integrantes, configurar `SECRET_KEY` aleatoria de al menos 32 caracteres y los valores Google privados por entorno.
 - Task 06: listado y consulta de bienes por ID, con su propia infraestructura de tests.
-- Autorizar los endpoints de inventario y evaluar limitación de intentos de inicio de sesión antes de tratar el sistema como listo para producción. Google OAuth no está implementado.
+- Autorizar los endpoints de inventario, implementar invitaciones y evaluar limitación de intentos de inicio de sesión antes de tratar el sistema como listo para producción.
 
 #### Próximo paso recomendado
 

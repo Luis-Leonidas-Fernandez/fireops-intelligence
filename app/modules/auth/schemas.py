@@ -1,6 +1,7 @@
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.modules.auth.validations.credentials import (
+    normalize_display_name,
     normalize_email,
     validate_registration_password,
 )
@@ -17,6 +18,13 @@ class CredentialsRequest(BaseModel):
 
 
 class RegisterRequest(CredentialsRequest):
+    display_name: str | None = None
+
+    @field_validator("display_name")
+    @classmethod
+    def check_display_name(cls, value: str | None) -> str | None:
+        return normalize_display_name(value)
+
     @field_validator("password")
     @classmethod
     def check_password(cls, value: str) -> str:
@@ -32,6 +40,7 @@ class UserResponse(BaseModel):
 
     id: int
     email: str
+    display_name: str | None
 
 
 class AuthResponse(BaseModel):

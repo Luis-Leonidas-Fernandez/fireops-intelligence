@@ -21,3 +21,12 @@ def validate_registration_password(value: str) -> str:
             "La contraseña debe tener entre 8 y 128 caracteres, con letras y números."
         )
     return value
+
+
+def normalize_display_name(value: str | None) -> str | None:
+    if value is None:
+        return None
+    name = " ".join(value.split())
+    if not name or len(name) > 120:
+        raise ValueError("El nombre debe tener entre 1 y 120 caracteres.")
+    return name
