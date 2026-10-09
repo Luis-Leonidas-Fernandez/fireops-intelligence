@@ -1,6 +1,6 @@
 # Tarea 06: listar activos y consultar por ID
 
-Esta guía define el alcance de implementación y verificación de la Tarea 06; no implementa los endpoints. El repositorio ya permite registrar activos y consultar categorías, pero todavía no cuenta con rutas GET para activos. Los archivos propuestos para el router de lectura y sus tests ya existen vacíos y sin seguimiento de Git: editarlos, no recrearlos.
+Esta guía explica, paso a paso, cómo implementar y verificar la Tarea 06. El router de lectura, su registro en FastAPI y los tests ya están escritos en este checkout; cada integrante debe conservar esos archivos al sincronizar el repositorio y ejecutar la verificación en su propia `fireassets_test`. Los ejemplos de código son material didáctico, no comandos para reemplazar archivos completos.
 
 ## Después de `git pull`: configuración local de cada integrante
 
@@ -74,8 +74,8 @@ Implementar y probar únicamente estos dos endpoints de lectura: listar todos lo
 - `app/modules/inventory/shared/models.py` mapea `Asset` a `bienes` y `Category` a `categorias`; `Asset.categoria_id` referencia `Category.id`.
 - `app/modules/inventory/register_category/router.py` define `POST /inventory/categories` y `GET /inventory/categories`; utiliza `select` de SQLAlchemy y ordena las categorías por ID.
 - `app/infrastructure/database/session.py` proporciona `AsyncSessionLocal` y `get_database_session`. Esta dependencia abre una sesión nueva; no aísla ni limpia por sí sola los datos de prueba.
-- `app/main.py` incluye actualmente las rutas de registro de activos y categorías. Aún no hay rutas GET para activos registradas.
-- Las pruebas actuales de inventario usan `pytest.mark.asyncio`, `HTTPX AsyncClient` con `ASGITransport` y nombres de categoría únicos. La prueba de activos inserta y confirma una categoría mediante `AsyncSessionLocal` y SQL antes de registrar un activo. No hay un `conftest.py` compartido, una sobreescritura de la dependencia para pruebas, una fixture de rollback ni un mecanismo de limpieza por prueba.
+- `app/main.py` incluye los routers de registro, categorías, autenticación y lectura de activos. No quites las rutas existentes al trabajar con la Tarea 06.
+- Las pruebas de inventario usan `pytest.mark.asyncio`, `HTTPX AsyncClient` con `ASGITransport` y nombres de categoría únicos. Algunos tests previos confirman datos sobre `fireassets_test`; los tests de esta tarea usan su propia fixture transaccional acotada a `test_get_asset_endpoint.py`. No hay un `conftest.py` compartido.
 - `pyproject.toml` configura fixtures y bucles de prueba de pytest-asyncio con alcance de sesión. `Makefile` ofrece `make test` (`pytest -v`), `make lint` y `make format`.
 - Los scripts `scripts/task05_run_tests_mac.sh` y `scripts/task05_run_tests_windows.ps1` seleccionan `.env.test`, ejecutan `alembic upgrade head` y luego `python -m pytest -v -s`. Los scripts `scripts/test-up.sh` y `scripts/test-up.ps1` inician la aplicación contra `fireassets_test`; sirven para pruebas manuales de API, no para aislar pruebas automatizadas.
 
@@ -115,7 +115,7 @@ No se necesita una migración: ambas tablas ya existen y esta tarea solo agrega 
 
 ## Crear los archivos que faltan
 
-En este checkout, `app/modules/inventory/get_asset/router.py` y `tests/modules/inventory/test_get_asset_endpoint.py` **ya existen como archivos vacíos no registrados en Git**. No ejecutes comandos de creación para ellos: abrilos y completalos. `app/main.py`, el directorio de tests y `get_asset/__init__.py` también existen: no los recrees ni reemplaces. La fixture `isolated_asset_session` se agregará dentro del archivo de tests. Los comandos siguientes son únicamente para otra copia donde falte alguno de los dos archivos; ejecutalos desde la raíz.
+En este checkout, `app/modules/inventory/get_asset/router.py` y `tests/modules/inventory/test_get_asset_endpoint.py` **ya contienen la implementación**. No ejecutes comandos de creación para ellos ni reemplaces su contenido. `app/main.py`, el directorio de tests y `get_asset/__init__.py` también existen. Los comandos siguientes son únicamente para una copia de trabajo anterior donde falte alguno de los dos archivos; ejecutalos desde la raíz.
 
 ### Windows — PowerShell
 
@@ -221,10 +221,10 @@ Crear categorías con nombres únicos generados y conservar los IDs devueltos po
 
 - [ ] `GET /inventory/assets/` devuelve `200`, todos los activos visibles en el contexto de prueba, con los campos de `RegisterAssetResponse` y orden ascendente por ID.
 - [ ] La respuesta vacía `[]` se verifica solo después de que la fixture garantice que no hay activos en ese contexto.
-- [ ] Los IDs existentes devuelven `200` con el esquema y los valores correctos; los IDs enteros inexistentes devuelven `404` con el detalle acordado; los IDs no enteros devuelven `422`.
+- [ ] Los IDs existentes devuelven `200` con el esquema y los valores correctos; los IDs enteros inexistentes devuelven `404` con `error.code = "HTTP_404"` y `error.message = "Asset not found."`; los IDs no enteros devuelven `422` con `error.code = "VALIDATION_ERROR"`.
 - [ ] Las pruebas crean sus propias categorías y activos, y no dependen del orden, de datos preexistentes, de IDs fijos ni de preparación manual.
 - [ ] La fixture `isolated_asset_session` abre una transacción externa, verifica que la base sea `fireassets_test`, enlaza la aplicación a la misma sesión con `join_transaction_mode="create_savepoint"`, restaura el override y revierte al finalizar, incluso si hay fallos.
-- [ ] La comprobación Test A / Test B demuestra que los bienes de A no aparecen en B y que B obtiene `200` con `[]` sin limpieza manual posterior.
+- [ ] `test_list_assets_ordered` crea bienes y verifica que existen (Test A); `test_list_assets_empty` inicia un contexto independiente y obtiene `200` con `[]` (Test B). Ejecutar ambos en los dos órdenes y por separado; no asumir que B depende de A.
 - [ ] Los tests deben producir el mismo resultado al ejecutarse individualmente, en conjunto y en distinto orden.
 - [ ] El nuevo router se registra en `app/main.py` y se conservan los routers actuales.
 - [ ] No se agregan migraciones ni comportamientos ajenos al alcance.
@@ -236,7 +236,7 @@ No agregar operaciones de actualización o eliminación de activos, filtros por 
 
 ## Guía de implementación
 
-Seguí estas etapas en orden. **No agregues código de producción hasta tener resuelto el aislamiento de las pruebas.**
+Estas etapas explican el orden de implementación para una clase o una copia de trabajo anterior. En este checkout el código ya está escrito: verificá primero el aislamiento y los tests antes de dar por terminada la tarea. **No agregues código de producción hasta tener resuelto el aislamiento de las pruebas.**
 
 ### Etapa 1 — Confirmar el entorno y los componentes existentes
 
@@ -481,7 +481,13 @@ async def test_get_asset_missing(isolated_asset_session: AsyncSession) -> None:
         response = await client.get(f"/inventory/assets/{missing_id}")
 
     assert response.status_code == 404
-    assert response.json() == {"detail": "Asset not found."}
+    assert response.json() == {
+        "error": {
+            "code": "HTTP_404",
+            "message": "Asset not found.",
+            "details": {},
+        }
+    }
 
 
 @pytest.mark.asyncio
@@ -491,13 +497,14 @@ async def test_get_asset_invalid_id(isolated_asset_session: AsyncSession) -> Non
         response = await client.get("/inventory/assets/not-an-id")
 
     assert response.status_code == 422
+    assert response.json()["error"]["code"] == "VALIDATION_ERROR"
 ```
 
 Cada test prepara y revierte su propio estado; la prueba de lista vacía no depende de que otra haya corrido antes. Los IDs de categorías y activos siempre proceden de filas creadas en el propio test. Las llamadas a la API y a la sesión son secuenciales, porque `AsyncSession` no admite uso concurrente. Referencia: [SQLAlchemy — Joining a Session into an External Transaction](https://docs.sqlalchemy.org/en/20/orm/session_transaction.html#joining-a-session-into-an-external-transaction-such-as-for-test-suites).
 
 ## Ejemplos de uso manual en `/docs`
 
-Estos son **resultados esperados una vez implementada la Tarea 06**; los GET de activos todavía no están activos. Desde la raíz del proyecto, inicie la aplicación con `./scripts/test-up.sh` (macOS/Linux) o `.\scripts\test-up.ps1` (Windows PowerShell) y abra `http://localhost:8000/docs`. Los GET no llevan request body. Los números de ID siguientes son **ilustrativos**: utilice siempre los IDs reales devueltos por los POST.
+Estos son resultados esperados de los endpoints de la Tarea 06. Desde la raíz del proyecto, inicie la aplicación con `./scripts/test-up.sh` (macOS/Linux) o `.\scripts\test-up.ps1` (Windows PowerShell) y abra `http://localhost:8000/docs`. Los GET no llevan request body. Los números de ID siguientes son **ilustrativos**: utilice siempre los IDs reales devueltos por los POST.
 
 ### 1. Preparar categorías y bienes
 
@@ -539,10 +546,10 @@ Escriba el `id` real devuelto por uno de los POST en el parámetro `asset_id` y 
 Para comprobar el error, utilice un ID entero cuya inexistencia haya verificado (no suponga que un número arbitrario está libre). La respuesta esperada es `404 Not Found`:
 
 ```json
-{"detail":"Asset not found."}
+{"error":{"code":"HTTP_404","message":"Asset not found.","details":{}}}
 ```
 
-Opcionalmente, envíe `not-an-id` como `asset_id`: FastAPI debe responder `422 Unprocessable Entity` porque el parámetro requerido es un entero. El cuerpo de validación lo genera FastAPI y puede variar según su versión.
+Opcionalmente, envíe `not-an-id` como `asset_id`: debe responder `422 Unprocessable Entity` porque el parámetro requerido es un entero. El manejador global expone `error.code = "VALIDATION_ERROR"` y los campos inválidos en `error.details.fields`.
 
 ## Comandos de prueba
 

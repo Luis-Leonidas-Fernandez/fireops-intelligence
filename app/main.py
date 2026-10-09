@@ -13,6 +13,7 @@ from app.modules.auth.validations.tokens import (
     ACCESS_TOKEN_COOKIE,
     validate_access_token,
 )
+from app.modules.inventory.get_asset.router import router as get_asset_router
 from app.modules.inventory.register_asset.router import router as register_asset_router
 from app.modules.inventory.register_category.router import (
     router as register_category_router,
@@ -60,6 +61,7 @@ app.add_exception_handler(Exception, unexpected_error_handler)
 app.include_router(register_asset_router)
 app.include_router(register_category_router)
 app.include_router(auth_router)
+app.include_router(get_asset_router)
 
 frontend_dir = Path(__file__).resolve().parent.parent / "frontend"
 app.mount("/css", StaticFiles(directory=frontend_dir / "css"), name="frontend-css")

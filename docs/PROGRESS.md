@@ -10,16 +10,30 @@ Al finalizar una jornada, decime `cerramos la jornada`. Se agregará una nueva f
 
 - La migración `0374d9a573a1` define `categorias` y `bienes`, con clave foránea de bien a categoría. Cada integrante debe aplicarla en su propia base; este archivo no confirma el estado de cada PostgreSQL local.
 - Están implementados `POST /inventory/assets`, `POST /inventory/categories` y `GET /inventory/categories`. La Task 05 fue completada y el equipo confirmó sus pruebas en sus entornos en septiembre.
-- La **Task 06 sigue pendiente**: `app/modules/inventory/get_asset/router.py` y `tests/modules/inventory/test_get_asset_endpoint.py` están vacíos, y el router no está registrado. `GET /inventory/assets` y `GET /inventory/assets/{asset_id}` todavía no existen.
+- La **Task 06 está implementada y verificada localmente**: `GET /inventory/assets/` lista bienes ordenados por ID y `GET /inventory/assets/{asset_id}` consulta uno o devuelve `404`. El router está registrado y los tests de esta tarea usan una transacción externa con SAVEPOINT y rollback por prueba. Falta confirmar la ejecución en los entornos de los demás integrantes antes de archivarla como completada por el equipo.
 - FastAPI sirve un dashboard HTML/CSS/JS en `/`, registro en `/registro` e inicio de sesión en `/iniciar-sesion`. Registro y acceso con correo/contraseña funcionan mediante `POST /auth/register` y `POST /auth/login`; `POST /auth/logout` borra la cookie de sesión. Sin cookie válida, `/` redirige a `/iniciar-sesion`.
 - Dashboard: diseño responsive, acento rojo, modo claro/oscuro, datos ilustrativos y conteo real de categorías. Las cifras, movimientos, alertas y CSV son demostraciones; no representan el inventario de PostgreSQL.
 - Los formularios validan los datos, muestran carga, éxito o error y solo redirigen tras una respuesta correcta. El botón Google inicia OAuth en el backend cuando el entorno está configurado; un usuario local puede vincularlo explícitamente desde su perfil. «Cerrar sesión» solicita eliminar la cookie y vuelve al inicio de sesión; si la petición falla, la navegación igualmente ocurre y el borrado no queda garantizado. Los endpoints de inventario todavía **no exigen autorización**; proteger `/` no los protege.
 - La migración `b70e8e0479aa` agrega `usuarios`; la revisión `c4e9f1d2a7b3` permite contraseña opcional y añade `google_sub` único. Ambas están aplicadas en `fireassets_test` de esta máquina; cada integrante debe migrar su propia base.
 - La revisión `d8b6e2f1940a` añade un nombre de perfil opcional y ya está aplicada en `fireassets_test` local. El app bar consulta `GET /auth/me` y muestra el nombre autenticado o, si falta, el correo; no usa un usuario ficticio. Cada integrante debe aplicar la migración en su propia base de prueba.
 - `scripts/test-up.sh` y `scripts/test-up.ps1` inician API y web con `.venv` y `.env.test`, verificando que la URL apunte a `fireassets_test`; no crean la base ni ejecutan migraciones.
-- La guía de SQLTools sigue en `vscode-tools.md`. `docs/README.md` organiza las guías, la arquitectura actual y los ADR. El aislamiento transaccional ya se implementó para los tests de autenticación; la fixture de Task 06 sigue pendiente.
+- La guía de SQLTools sigue en `vscode-tools.md`. `docs/README.md` organiza las guías, la arquitectura actual y los ADR. Los tests de autenticación y de Task 06 disponen de fixtures transaccionales propias; los tests anteriores de inventario no comparten todavía esa infraestructura.
 
 ## Registro de jornadas
+
+### 2026-10-08
+
+#### Completado localmente
+
+- Se incorporaron `GET /inventory/assets/` y `GET /inventory/assets/{asset_id}` reutilizando `Asset`, `RegisterAssetResponse` y la dependencia de sesión existentes. El listado ordena en SQL por ID; la ausencia de un bien devuelve el contrato de error HTTP centralizado.
+- Los tests de Task 06 crean categorías con IDs obtenidos de la base, comparten una sesión con los endpoints mediante el override de FastAPI y usan `join_transaction_mode="create_savepoint"` para que los `commit()` de los endpoints no confirmen la transacción externa. Cada test revierte sus cambios; los bienes preexistentes se ocultan solo dentro de la transacción de prueba.
+- Verificación contra `.env.test` apuntando a `fireassets_test`: **5 tests de Task 06 aprobados**, **57 tests Python de la suite aprobados**. Los casos de lista con bienes y lista vacía pasaron en ambos órdenes, y el caso vacío pasó individualmente. No se ejecutaron migraciones ni se modificó la base normal.
+- Se corrigió la expectativa de `404` en tests y guía: la respuesta usa `error.code`, `error.message` y `error.details`, no un campo `detail` en la raíz.
+
+#### Pendiente
+
+- Cada integrante debe actualizar su rama, aplicar las migraciones faltantes en su propia `fireassets_test` y repetir la suite. La Task 06 no se archiva hasta confirmar esa verificación en el equipo.
+- Persisten los pendientes de autorización de inventario, invitaciones y limitación de intentos de inicio de sesión; no pertenecen a esta tarea.
 
 ### 2026-10-04
 
