@@ -17,6 +17,21 @@ Los seis routers de inventario declaran la misma dependencia `app/modules/auth/d
 
 La autenticación sí separa router (`app/modules/auth/router.py`), reglas de registro/login (`service.py`), schemas (`schemas.py`), modelo `User` (`models.py`) y validadores reutilizables (`validations/`). Hash Argon2 y verificación se ejecutan en threadpool. Alembic crea la tabla `usuarios`; ningún dato de PostgreSQL llega mediante `git pull`.
 
+### Estructura implementada: rol y estado del usuario
+
+El [modelo físico](../../Phase_01/data-modeling/guie.md#3-tabla-roles) incluye el catálogo `roles` y los campos `usuarios.rol_id` y `usuarios.activo`. La revisión `e7d4c2f9a621` y el modelo `User` ya incorporan esta estructura, sin cambiar las reglas de autorización. Cada integrante debe confirmar su base de destino antes de aplicar la migración.
+
+| Elemento implementado | Transición compatible |
+|---|---|
+| `roles` | Catálogo con `id`, `nombre` único, `descripcion`, `activo`, `created_at` y `updated_at`. La migración siembra únicamente `ADMINISTRADOR` y `SUPERVISOR`; sembrar el catálogo no asigna privilegios a ninguna cuenta. |
+| `usuarios.rol_id` | Clave foránea nullable a `roles.id`. Las cuentas existentes conservarán `NULL`; ningún usuario existente ni nuevo recibirá automáticamente un rol privilegiado. Una asignación controlada posterior podrá preceder a cualquier requisito `NOT NULL`. |
+| `usuarios.activo` | Booleano no nulo con valor predeterminado `true`, para conservar activas las cuentas existentes durante la migración. |
+| `usuarios.password_hash` | Permanece nullable: las cuentas creadas solo con Google no tienen contraseña local. |
+
+Esta fase implementa **solo el fundamento de esquema**, no permisos por rol: el guard de inventario seguirá comprobando autenticación, no `rol_id` ni `activo`, hasta implementar explícitamente la política de acceso. Las invitaciones, la administración de roles y el cierre del registro abierto son trabajo posterior; no deben inferirse de la presencia de estas columnas.
+
+El requisito RNF-SEG-02 menciona además la función de carga; queda pendiente de revisión para una fase posterior. Por decisión actual del equipo, el catálogo inicial contiene solo `ADMINISTRADOR` y `SUPERVISOR`.
+
 Google agrega `google_oauth.py` para el proveedor, `google_service.py` para las reglas de cuentas y `validations/google_flow.py` para el estado efímero firmado. El flujo es código de autorización en el servidor; JavaScript no recibe tokens Google. Véase [ADR-006](../adr/ADR-006-google-oauth-identity.md).
 `google_observability.py` registra eventos JSON con `attempt_id`, etapa, resultado y motivo controlado, sin secretos ni datos de identidad. Los scripts de desarrollo ejecutan Uvicorn con `--no-access-log`, porque la URL del callback contiene `code` y `state`; SQLAlchemy también evita imprimir parámetros. Véase la [guía de diagnóstico](../../getting-started/google-oauth.md#diagnóstico-seguro-en-la-terminal).
 
