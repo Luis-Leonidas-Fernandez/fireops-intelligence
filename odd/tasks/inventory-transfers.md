@@ -29,8 +29,8 @@ Allow an authenticated user to transfer an existing asset to an active location 
 
 ## Progress
 
-- Branch: `codex/inventory-locations`; the earlier location implementation is staged but not committed.
+- Branch: `codex/inventory-locations`.
 - State: implemented and verified locally. Migration `a6a239f7b4dc` applied exclusively to `fireassets_test`.
 - Rollback boundary: revert the movement migration, `Movement` ORM mappings, transfer router/schemas, transfer tests, and transfer documentation together; leave the earlier location feature intact.
-- The changed files are not committed or pushed. An unrelated untracked DOCX remains untouched.
+- Commit: `4310787` includes transfers together with the dependent inventory workflows. It has not been pushed. An unrelated untracked DOCX remains untouched.
 - Delivery: no push or merge without user authorization.

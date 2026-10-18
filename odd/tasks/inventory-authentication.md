@@ -23,7 +23,7 @@ Require a valid local session and an existing user for every inventory endpoint,
 ## Verification and delivery
 - Test-first RED/GREEN and full Python suite; Ruff, mypy, and `git diff --check`.
 - Forecast ~350 authored changed lines; ask-on-risk delivery strategy.
-- Commit pending: earlier inventory-location/transfer changes are staged and overlap files in this unit; do not mix them.
+- Commit: `4310787` includes authentication together with the dependent inventory workflows after the combined worktree passed verification.
 - The requested full-directory Ruff format check finds a pre-existing missing final newline in `app/modules/inventory/register_category/schemas.py` (outside the authorized edit surface). All changed Python files pass the scoped format check.
 - Runtime scenario: `pytest` exercised FastAPI endpoints through `ASGITransport` with both authenticated and unauthenticated clients. Rollback boundary: the shared auth dependency, router-level dependency declarations, and inventory auth tests/fixtures can be removed independently of the earlier staged location/transfer changes.
 - The authenticated client fixture owns the HTTPX lifecycle with `async with` and yields an open client; endpoint tests reuse it without re-entering it. Follow-up verification: 68 inventory tests and 116 total Python tests passed, plus Ruff, mypy, and `git diff --check`.

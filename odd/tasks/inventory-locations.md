@@ -35,3 +35,4 @@ Implement the location fields and relationships from the documented physical mod
 - Verification: `ENV_FILE=.env.test python -m pytest -q` → 65 passed; frontend `node --test frontend/tests/*.test.cjs` → 12 passed; `python -m mypy app/modules/inventory` → no issues; `ruff check` and changed-file `ruff format --check` passed. Full-tree format check still reports two pre-existing files in `register_category`.
 - Rollback boundary: revert the inventory-location migration, location router/schemas, asset location fields, related tests, and corresponding documentation together; do not revert unrelated authentication or category changes.
 - Delivery: no push or merge without user authorization.
+- Commit: `4310787` includes locations together with the dependent inventory workflows after the combined worktree passed verification.

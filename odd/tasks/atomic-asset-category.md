@@ -26,6 +26,6 @@ Allow `POST /inventory/assets` to accept either an existing `category_id` or a `
 - RED/GREEN evidence: RED 5 failed/1 passed; GREEN focused 6 passed and full suite 76 passed against `fireassets_test`.
 - Runtime harness: ASGI/httpx tests exercising the real FastAPI route and PostgreSQL test database; no browser/frontend change in scope.
 - Rollback boundary: the service, request extension and HTTP integration in `app/modules/inventory/register_asset/`, the shared fixture plus new tests, and the two documentation updates; preserve the pre-existing location/transfer work.
-- Commit evidence: pending. The index already contains unrelated staged location/transfer changes, including earlier versions of the same router and docs. Do not combine them into this feature's commit or reset them.
+- Commit evidence: `4310787` includes atomic registration together with the dependent inventory workflows after the combined worktree passed verification.
 - Delivery strategy: ask-on-risk. Forecast ~300 authored lines; update actual count after implementation.
-- Next step: separate earlier staged location/transfer work into its own commit before committing this atomic registration unit; frontend form remains a separate future task.
+- Next step: the frontend form remains a separate future task. No push or merge has been performed.
