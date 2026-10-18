@@ -1,16 +1,19 @@
 # Arquitectura actual del backend
 
-El backend actual es una aplicación FastAPI que registra dos routers de inventario y uno de autenticación, y sirve la web en el mismo origen. Esta página describe **cómo funciona hoy**; [ADR-001](../adr/ADR-001-backend-architecture.md) explica la organización inicial del inventario y [ADR-005](../adr/ADR-005-email-password-authentication.md) la autenticación.
+El backend actual es una aplicación FastAPI que registra los routers de inventario y autenticación, y sirve la web en el mismo origen. Esta página describe **cómo funciona hoy**; [ADR-001](../adr/ADR-001-backend-architecture.md) explica la organización inicial del inventario y [ADR-005](../adr/ADR-005-email-password-authentication.md) la autenticación.
 
 ## Flujo de una petición de inventario
 
 ```text
 HTTP → FastAPI (`app/main.py`) → router de inventario
-     → schema Pydantic → `get_database_session`
+     → `require_authenticated_user` → schema Pydantic → `get_database_session`
+     → servicio de alta o edición de bienes (si corresponde)
      → `AsyncSession` / modelo SQLAlchemy → PostgreSQL
 ```
 
-No hay una capa `service` ni `repository` implementada para estas rutas. Los routers de alta ejecutan la persistencia directamente. La sesión se crea en `app/infrastructure/database/session.py` a partir de la URL cargada por `app/config/settings.py`.
+El alta de bienes usa `register_asset/service.py` para resolver la categoría y persistir bien y categoría en una sola transacción. La edición usa `update_asset/service.py` para bloquear el bien y confirmar el cambio junto con una fila de auditoría. Los routers conservan el mapeo HTTP. Las otras rutas de inventario mantienen su organización actual, sin una capa `repository` general. La sesión se crea en `app/infrastructure/database/session.py` a partir de la URL cargada por `app/config/settings.py`.
+
+Los seis routers de inventario declaran la misma dependencia `app/modules/auth/dependencies.py::require_authenticated_user`, aplicada a sus once endpoints. El helper valida la cookie local de 30 minutos y confirma que el usuario todavía existe mediante la misma `AsyncSession` de la petición; una sesión ausente, inválida, expirada o perteneciente a un usuario eliminado devuelve `401` con `error.code = AUTH_REQUIRED`. El traslado y la edición reciben además el usuario autenticado para atribuir el cambio, sin repetir la consulta gracias al caché de dependencias de FastAPI. Esto no implementa permisos por rol.
 
 La autenticación sí separa router (`app/modules/auth/router.py`), reglas de registro/login (`service.py`), schemas (`schemas.py`), modelo `User` (`models.py`) y validadores reutilizables (`validations/`). Hash Argon2 y verificación se ejecutan en threadpool. Alembic crea la tabla `usuarios`; ningún dato de PostgreSQL llega mediante `git pull`.
 
@@ -24,6 +27,14 @@ Google agrega `google_oauth.py` para el proveedor, `google_service.py` para las 
 | `POST /inventory/categories` | `register_category` | `201`, `CategoryResponse` |
 | `GET /inventory/categories` | `register_category` | `200`, lista de `CategoryResponse` ordenada por ID |
 | `POST /inventory/assets` | `register_asset` | `201`, `RegisterAssetResponse` |
+| `GET /inventory/assets/` | `get_asset` | `200`, lista de bienes ordenada por ID |
+| `GET /inventory/assets/{asset_id}` | `get_asset` | `200` con el bien o `404` |
+| `PATCH /inventory/assets/{asset_id}` | `update_asset` | `200` con el bien editado, `404` si no existe |
+| `POST /inventory/assets/{asset_id}/transfers` | `transfer_asset` | `201`, traslado registrado |
+| `GET /inventory/assets/{asset_id}/transfers` | `transfer_asset` | `200`, historial de traslados |
+| `POST /inventory/locations` | `register_location` | `201`, `LocationResponse` |
+| `GET /inventory/locations` | `register_location` | `200`, lista de ubicaciones ordenada por ID |
+| `GET /inventory/locations/{location_id}` | `register_location` | `200` con la ubicación o `404` |
 | `POST /auth/register` | `auth/router.py` | `201`, `message` y `user`; establece cookie de sesión |
 | `POST /auth/login` | `auth/router.py` | `200`, `message` y `user`; establece cookie de sesión |
 | `POST /auth/logout` | `auth/router.py` | `204`; elimina cookie del navegador |
@@ -33,7 +44,29 @@ Google agrega `google_oauth.py` para el proveedor, `google_service.py` para las 
 | `GET /` | `app/main.py` | Dashboard con token válido; si no, `303` a `/iniciar-sesion` |
 | `GET /health` | `app/main.py` | `200`, `{"status":"ok"}` |
 
-Los schemas de petición usan nombres públicos en inglés (`name`, `internal_code`, `category_id`); los modelos almacenan columnas `nombre`, `codigo_interno` y `categoria_id`. Los routers transforman entre ambos. Al crear un bien, `category_id` debe referir a una categoría existente.
+Los schemas de petición usan nombres públicos en inglés (`name`, `internal_code`, `category_id`, `new_category_name`, `location_id`); los modelos almacenan columnas `nombre`, `codigo_interno`, `categoria_id` y `ubicacion_id`. Al crear un bien se proporciona **exactamente uno** de `category_id` (categoría existente) o `new_category_name` (3–100 caracteres). En el segundo caso, el servicio reutiliza una categoría con ese nombre exacto o la crea y registra el bien antes de confirmar una única transacción. Si falla el registro del bien, la categoría nueva también se revierte. `location_id` es opcional y, si se envía, debe apuntar a una ubicación activa.
+
+Todas las operaciones `/inventory/...` de la tabla requieren iniciar sesión antes de probarlas en `/docs`; la cookie se obtiene con `POST /auth/login` o con el flujo Google en el mismo navegador.
+
+Ejemplo de alta que también crea o reutiliza una categoría:
+
+```json
+{"internal_code":"CASCO-001","name":"Casco estructural","new_category_name":"Cascos"}
+```
+
+Para corregir un bien, `PATCH /inventory/assets/{asset_id}` acepta uno o más de `internal_code`, `name` y `category_id`, además de `reason` obligatorio y no vacío. Rechaza `location_id` y campos desconocidos (`422`): la ubicación cambia solo mediante traslados. Una categoría inexistente o un código duplicado devuelve `409`. La respuesta reutiliza `RegisterAssetResponse`. El servicio bloquea el bien y, en una transacción, escribe el cambio y una fila `CORRECCION`/`BIEN` en `auditoria_cambios`, con actor de la sesión, motivo, fecha, `operacion_id` y snapshots JSONB completos. Si alguna escritura falla, se revierten ambas. No agrega un movimiento. Ejemplo: `{"name":"Casco estructural corregido","reason":"Corrección de carga"}`.
+
+`ubicaciones` representa lugares físicos o vehículos contenedores. Sus campos son `id`, `bien_contenedor_id` opcional, `nombre`, `tipo_ubicacion`, `descripcion` opcional, `activa`, `created_at` y `updated_at`. `tipo_ubicacion` admite `FISICA` sin bien contenedor o `VEHICULO` con un bien contenedor existente y único. Varios bienes pueden estar en una ubicación; un bien puede representar, como máximo, una ubicación vehicular. La base impide la autoubicación y los ciclos de contención. Un bien antiguo mantiene `ubicacion_id = NULL` tras la migración.
+
+Un traslado requiere una sesión local válida. `POST /inventory/assets/{asset_id}/transfers` recibe `destination_location_id` y, opcionalmente, `reason` y `observations`. No acepta el usuario ni el origen desde el cliente: obtiene al actor de la cookie y el origen del estado actual del bien. En una sola transacción actualiza `bienes.ubicacion_id` y agrega un registro `TRASLADO` a `movimientos`. Rechaza un destino inexistente, inactivo, idéntico al origen o que forme un ciclo; si falla, no cambia el bien ni guarda el movimiento. `GET /inventory/assets/{asset_id}/transfers` devuelve el historial ordenado por fecha e ID.
+
+Ejemplo de cuerpo para trasladar un bien existente a una ubicación activa cuyo ID se obtuvo de `GET /inventory/locations`:
+
+```json
+{"destination_location_id": 2, "reason": "Asignación operativa", "observations": "Equipo revisado"}
+```
+
+El `2` es ilustrativo: cada integrante debe usar un ID real de su propia base de prueba. El endpoint está disponible en `/docs` tras iniciar sesión en el mismo navegador.
 
 `POST /auth/register` y `/auth/login` reciben correo y contraseña; el registro admite además `display_name` opcional (1–120 caracteres normalizados). Se normaliza el correo; el registro exige contraseña de 8 a 128 caracteres con letras y números. La respuesta exitosa no incluye la contraseña ni el JWT. `GET /auth/me` obtiene el perfil mediante esa misma sesión y el dashboard muestra `display_name` o, si falta, el correo. El JWT HS256 dura 30 minutos y viaja en una cookie `fire_control_access` HttpOnly, SameSite=Lax (`Secure` en `ENVIRONMENT=production`). `SECRET_KEY` debe tener al menos 32 caracteres.
 
@@ -42,9 +75,11 @@ Los schemas de petición usan nombres públicos en inglés (`name`, `internal_co
 - FastAPI/Pydantic devuelve `422` para cuerpos inválidos; el handler global lo presenta con `error.code = VALIDATION_ERROR` y `error.details.fields`.
 - Los routers de inventario existentes capturan `IntegrityError`, hacen rollback y elevan `HTTPException(409)`; el handler global serializa esa excepción como `HTTP_409`. No es el mismo código de error de los servicios de autenticación.
 - `app/shared/errors/` centraliza `{"error":{"code":"...","message":"...","details":{...}}}`. Auth usa `ApplicationError`: correo repetido `EMAIL_ALREADY_REGISTERED` (`409`), credenciales incorrectas `INVALID_CREDENTIALS` (`401`). Los errores inesperados devuelven `500` con mensaje controlado.
-- `app/modules/inventory/get_asset/router.py` y su archivo de tests están vacíos. Los `GET` de bienes de [Task 06](../../../labs/TASK_06_GET_ASSET_BY_ID.md) siguen pendientes y no aparecen en Swagger.
-- La cookie solo protege la página `/`; **los endpoints de inventario y `/docs` siguen públicos**. No hay limitación de intentos de login ni revocación server-side de JWT emitidos. El registro abierto también permite cuentas Google con correo verificado; las invitaciones aún no están implementadas.
+- Los `GET` de bienes de [Task 06](../../../labs/TASK_06_GET_ASSET_BY_ID.md) ya están implementados. Las rutas de ubicaciones permiten alta y consulta; el traslado se realiza desde la ruta del bien. No se implementaron edición ni baja de ubicaciones, ni otros tipos de movimiento.
+- La cookie protege la página `/` y todos los endpoints de inventario. `/docs` sigue visible sin sesión, pero llamar esas rutas sin una cookie válida devuelve `401`. No hay permisos por rol, limitación de intentos de login ni revocación server-side de JWT emitidos. El registro abierto también permite cuentas Google con correo verificado; las invitaciones aún no están implementadas.
 
 ## Persistencia y pruebas
 
-`migrations/versions/0374d9a573a1_create_categories_and_assets_tables.py` crea `categorias` y `bienes` con clave foránea; `migrations/versions/b70e8e0479aa_create_auth_users.py` crea `usuarios`; `migrations/versions/c4e9f1d2a7b3_add_google_identity.py` permite cuentas solo-Google y agrega `google_sub` único; `migrations/versions/d8b6e2f1940a_add_user_display_name.py` añade `display_name` nullable sin modificar las cuentas existentes. La fixture `tests/modules/auth/conftest.py` verifica `fireassets_test` y comparte una `AsyncSession` con los endpoints dentro de una transacción exterior/SAVEPOINT; el rollback final aísla las pruebas de auth incluso ante `commit()` interno. Los tests antiguos de inventario pueden dejar datos; la extensión a Task 06 está en [ADR-004](../adr/ADR-004-testing-database-isolation.md). Véase [ADR-002](../adr/ADR-002-database-persistence.md) para PostgreSQL y sesiones asíncronas.
+`migrations/versions/0374d9a573a1_create_categories_and_assets_tables.py` crea `categorias` y `bienes` con clave foránea; `migrations/versions/b70e8e0479aa_create_auth_users.py` crea `usuarios`; `migrations/versions/c4e9f1d2a7b3_add_google_identity.py` permite cuentas solo-Google y agrega `google_sub` único; `migrations/versions/d8b6e2f1940a_add_user_display_name.py` añade `display_name` nullable. `migrations/versions/e42c7910b6af_add_inventory_locations.py` crea `ubicaciones`, agrega `bienes.ubicacion_id` nullable, sus claves e índices y los triggers que rechazan ciclos. `migrations/versions/a6a239f7b4dc_add_inventory_movements.py` crea `movimientos` con claves foráneas a bien, usuario y ubicaciones, tipo controlado e índice para consultar el historial por bien y fecha. `migrations/versions/c15b4e3d9a20_add_audit_changes.py` crea `auditoria_cambios` con claves, restricciones e índices del modelo físico 1.1. Estas tres revisiones de inventario se aplicaron solo a `fireassets_test` local; cada integrante debe confirmar su destino real antes de migrar.
+
+Las fixtures transaccionales de autenticación e inventario comparten una `AsyncSession` con FastAPI mediante un override y revierten la transacción externa después de cada prueba, incluso si el endpoint ejecuta `commit()`. La fixture común y el cliente autenticado de inventario residen en `tests/modules/inventory/conftest.py`; las pruebas de bienes, categorías, ubicaciones y traslados la reutilizan. Véase [ADR-004](../adr/ADR-004-testing-database-isolation.md) para el aislamiento y [ADR-002](../adr/ADR-002-database-persistence.md) para PostgreSQL y sesiones asíncronas.

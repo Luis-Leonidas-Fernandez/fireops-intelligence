@@ -10,16 +10,42 @@ Al finalizar una jornada, decime `cerramos la jornada`. Se agregará una nueva f
 
 - La migración `0374d9a573a1` define `categorias` y `bienes`, con clave foránea de bien a categoría. Cada integrante debe aplicarla en su propia base; este archivo no confirma el estado de cada PostgreSQL local.
 - Están implementados `POST /inventory/assets`, `POST /inventory/categories` y `GET /inventory/categories`. La Task 05 fue completada y el equipo confirmó sus pruebas en sus entornos en septiembre.
+- `POST /inventory/assets` ahora acepta una categoría existente (`category_id`) o el nombre de una nueva (`new_category_name`), nunca ambos. La categoría se reutiliza por nombre exacto si ya existe; si hay que crearla, categoría y bien se confirman juntos o se revierten juntos. El frontend todavía no tiene el formulario para esta opción.
 - La **Task 06 está implementada y verificada localmente**: `GET /inventory/assets/` lista bienes ordenados por ID y `GET /inventory/assets/{asset_id}` consulta uno o devuelve `404`. El router está registrado y los tests de esta tarea usan una transacción externa con SAVEPOINT y rollback por prueba. Falta confirmar la ejecución en los entornos de los demás integrantes antes de archivarla como completada por el equipo.
 - FastAPI sirve un dashboard HTML/CSS/JS en `/`, registro en `/registro` e inicio de sesión en `/iniciar-sesion`. Registro y acceso con correo/contraseña funcionan mediante `POST /auth/register` y `POST /auth/login`; `POST /auth/logout` borra la cookie de sesión. Sin cookie válida, `/` redirige a `/iniciar-sesion`.
 - Dashboard: diseño responsive, acento rojo, modo claro/oscuro, datos ilustrativos y conteo real de categorías. Las cifras, movimientos, alertas y CSV son demostraciones; no representan el inventario de PostgreSQL.
-- Los formularios validan los datos, muestran carga, éxito o error y solo redirigen tras una respuesta correcta. El botón Google inicia OAuth en el backend cuando el entorno está configurado; un usuario local puede vincularlo explícitamente desde su perfil. «Cerrar sesión» solicita eliminar la cookie y vuelve al inicio de sesión; si la petición falla, la navegación igualmente ocurre y el borrado no queda garantizado. Los endpoints de inventario todavía **no exigen autorización**; proteger `/` no los protege.
+- Los formularios validan los datos, muestran carga, éxito o error y solo redirigen tras una respuesta correcta. El botón Google inicia OAuth en el backend cuando el entorno está configurado; un usuario local puede vincularlo explícitamente desde su perfil. «Cerrar sesión» solicita eliminar la cookie y vuelve al inicio de sesión; si la petición falla, la navegación igualmente ocurre y el borrado no queda garantizado. **Las once rutas de inventario exigen ahora una sesión local válida y un usuario existente** mediante una dependencia compartida; faltan permisos por rol.
 - La migración `b70e8e0479aa` agrega `usuarios`; la revisión `c4e9f1d2a7b3` permite contraseña opcional y añade `google_sub` único. Ambas están aplicadas en `fireassets_test` de esta máquina; cada integrante debe migrar su propia base.
 - La revisión `d8b6e2f1940a` añade un nombre de perfil opcional y ya está aplicada en `fireassets_test` local. El app bar consulta `GET /auth/me` y muestra el nombre autenticado o, si falta, el correo; no usa un usuario ficticio. Cada integrante debe aplicar la migración en su propia base de prueba.
+- La revisión `e42c7910b6af` agrega ubicaciones físicas y vehiculares con relación opcional desde bienes, restricciones de integridad y prevención de ciclos. Está aplicada solo en `fireassets_test` local. Existen `POST`/`GET` de ubicaciones y los bienes aceptan `location_id` opcional. El resto del equipo aún debe verificar su propia base antes de migrar.
+- La revisión `a6a239f7b4dc` agrega el historial `movimientos`. Un usuario autenticado puede trasladar un bien entre ubicaciones activas; la ubicación actual y el movimiento se guardan juntos, y puede consultar el historial del bien. Está aplicada solo en `fireassets_test` local.
+- La revisión `c15b4e3d9a20` crea `auditoria_cambios` según el modelo físico 1.1; está aplicada solo en `fireassets_test` local. `PATCH /inventory/assets/{asset_id}` corrige código interno, nombre o categoría con un motivo obligatorio y guarda el cambio y su auditoría en una sola transacción. La ubicación solo se cambia mediante traslados. La edición requiere sesión, pero todavía no hay roles ni invitaciones.
 - `scripts/test-up.sh` y `scripts/test-up.ps1` inician API y web con `.venv` y `.env.test`, verificando que la URL apunte a `fireassets_test`; no crean la base ni ejecutan migraciones.
 - La guía de SQLTools sigue en `vscode-tools.md`. `docs/README.md` organiza las guías, la arquitectura actual y los ADR. Los tests de autenticación y de Task 06 disponen de fixtures transaccionales propias; los tests anteriores de inventario no comparten todavía esa infraestructura.
 
 ## Registro de jornadas
+
+### 2026-10-18
+
+#### Completado localmente
+
+- Se implementó la edición parcial de bienes con un servicio transaccional separado del router. Registra actor, motivo y copias JSONB completas antes/después en `auditoria_cambios`; si falla la auditoría, se revierte también el bien. Las pruebas comprobaron primero `405` (RED) y después éxito, validación, autenticación y rollback. Se verificó la base efectiva `fireassets_test` antes de aplicar `c15b4e3d9a20`; **133 tests Python aprobados**, `alembic check` sin cambios pendientes. No se modificó `fireassets`.
+
+- Se protegieron todos los endpoints de bienes, categorías, ubicaciones y traslados con `require_authenticated_user`. La dependencia compartida valida la cookie y consulta al usuario; si falta, es inválida, expiró o pertenece a un usuario eliminado, responde `401` con `AUTH_REQUIRED`. Las pruebas antiguas de inventario usan ahora una sesión y un cliente autenticado, ambos aislados por transacción y rollback. Verificación local: **116 tests Python aprobados** contra `fireassets_test`; Ruff y mypy sin errores en los archivos modificados. No se modificó `fireassets`.
+
+- Se agregó el alta atómica de categoría y bien sin migración nueva. Se separó la persistencia en `register_asset/service.py` y se centralizó la fixture de inventario en `tests/modules/inventory/conftest.py`. Los seis tests nuevos demostraron primero cinco fallos RED y luego pasaron; la suite Python completa aprobó **76 tests** en `fireassets_test`. No se modificó `fireassets`.
+
+- Se agregó `POST /inventory/assets/{asset_id}/transfers` y `GET /inventory/assets/{asset_id}/transfers`. El traslado requiere sesión, toma el usuario de la cookie y el origen del bien, bloquea el bien durante la operación y guarda estado e historial en la misma transacción. Se rechazan destinos inactivos, traslados repetidos y ciclos; los errores no generan movimientos.
+- La tabla `movimientos` sigue los campos y claves del modelo físico 1.1, con tipo de movimiento restringido y consulta ordenada por bien y fecha. La migración `a6a239f7b4dc` se aplicó después de confirmar por conexión real que la base era `fireassets_test` y la revisión previa `e42c7910b6af`.
+- Verificación posterior al traslado: **70 tests Python** y **12 tests frontend** aprobados; Ruff, mypy del módulo de inventario y `alembic check` sin diferencias pendientes.
+- Se implementó la tabla `ubicaciones` del modelo físico 1.1: nombre, tipo, descripción, activo, marcas de tiempo y bien contenedor opcional. La relación `bienes.ubicacion_id` es nullable para conservar los registros anteriores.
+- La base aplica claves foráneas, tipo coherente con bien contenedor, unicidad del vehículo contenedor e impide autoubicación y ciclos. Se añadieron los endpoints para crear/listar/consultar ubicaciones; el registro y lectura de bienes incluyen `location_id`.
+- Antes de migrar se confirmó mediante una conexión real que el destino era `fireassets_test` local y que Alembic estaba en `d8b6e2f1940a`. Después, `alembic current` informó `e42c7910b6af` y `alembic check` no detectó operaciones pendientes.
+- La suite Python completa aprobó **65 tests** contra `fireassets_test`; las nuevas pruebas de ubicación usan transacción externa, SAVEPOINT y rollback por caso. No se migró `fireassets`.
+
+#### Pendiente
+
+- Cada integrante debe verificar que su conexión apunte a `fireassets_test` antes de aplicar las revisiones `e42c7910b6af` y `a6a239f7b4dc` y ejecutar los tests. Siguen pendientes la edición y baja de ubicaciones y los formularios frontend para ubicaciones y traslados; el traslado ya funciona mediante la API.
 
 ### 2026-10-08
 

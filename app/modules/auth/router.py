@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config.settings import get_settings
 from app.infrastructure.database.session import get_database_session
+from app.modules.auth.dependencies import current_user_id
 from app.modules.auth.google_oauth import (
     GoogleOAuthFailure,
     create_authorization_url,
@@ -34,7 +35,6 @@ from app.modules.auth.validations.tokens import (
     ACCESS_TOKEN_COOKIE,
     ACCESS_TOKEN_TTL,
     create_access_token,
-    validate_access_token,
 )
 from app.shared.errors.authentication_error import AuthenticationError
 
@@ -108,16 +108,6 @@ def google_error_response(code: str, source: str = "login") -> RedirectResponse:
     return response
 
 
-def current_user_id(request: Request) -> int | None:
-    token = request.cookies.get(ACCESS_TOKEN_COOKIE)
-    if not token:
-        return None
-    try:
-        return validate_access_token(token, get_settings().secret_key)
-    except AuthenticationError:
-        return None
-
-
 @router.get("/google/start", include_in_schema=False)
 async def google_start(
     request: Request,
@@ -128,14 +118,18 @@ async def google_start(
     settings = get_settings()
     origin = "dashboard" if flow == "link" else source
     if not settings.google_oauth_enabled:
-        observe_google_auth("start", "rejected", new_attempt_id(), reason="not_configured")
+        observe_google_auth(
+            "start", "rejected", new_attempt_id(), reason="not_configured"
+        )
         return google_error_response("GOOGLE_NOT_CONFIGURED", origin)
 
     user_id = None
     if flow == "link":
         user_id = current_user_id(request)
         if user_id is None or await session.get(User, user_id) is None:
-            observe_google_auth("start", "rejected", new_attempt_id(), reason="login_required")
+            observe_google_auth(
+                "start", "rejected", new_attempt_id(), reason="login_required"
+            )
             return google_error_response("GOOGLE_LOGIN_REQUIRED")
 
     google_flow = new_google_flow(flow, origin, user_id)
@@ -172,22 +166,32 @@ async def google_callback(
     settings = get_settings()
     token = request.cookies.get(GOOGLE_FLOW_COOKIE)
     if not settings.google_oauth_enabled or not token:
-        observe_google_auth("callback", "rejected", new_attempt_id(), reason="missing_flow")
+        observe_google_auth(
+            "callback", "rejected", new_attempt_id(), reason="missing_flow"
+        )
         return google_error_response("GOOGLE_SESSION_EXPIRED")
     try:
         flow = decode_google_flow(token, settings.secret_key)
     except GoogleOAuthFailure as failure:
-        observe_google_auth("callback", "rejected", new_attempt_id(), reason="invalid_flow")
+        observe_google_auth(
+            "callback", "rejected", new_attempt_id(), reason="invalid_flow"
+        )
         return google_error_response(failure.code)
 
     if not state or not secrets.compare_digest(state, flow.state):
-        observe_google_auth("callback", "rejected", flow.attempt_id, reason="invalid_state")
+        observe_google_auth(
+            "callback", "rejected", flow.attempt_id, reason="invalid_state"
+        )
         return google_error_response("GOOGLE_SESSION_EXPIRED", flow.source)
     if error:
-        observe_google_auth("callback", "rejected", flow.attempt_id, reason="provider_denied")
+        observe_google_auth(
+            "callback", "rejected", flow.attempt_id, reason="provider_denied"
+        )
         return google_error_response("GOOGLE_ACCESS_DENIED", flow.source)
     if not code:
-        observe_google_auth("callback", "rejected", flow.attempt_id, reason="missing_code")
+        observe_google_auth(
+            "callback", "rejected", flow.attempt_id, reason="missing_code"
+        )
         return google_error_response("GOOGLE_AUTH_FAILED", flow.source)
 
     account_started = False
@@ -212,7 +216,9 @@ async def google_callback(
             set_auth_cookie(response, user.id)
     except GoogleOAuthFailure as failure:
         if account_started:
-            observe_google_auth("account", "failed", flow.attempt_id, reason=failure.code)
+            observe_google_auth(
+                "account", "failed", flow.attempt_id, reason=failure.code
+            )
         observe_google_auth("callback", "failed", flow.attempt_id, reason=failure.code)
         return google_error_response(failure.code, flow.source)
 

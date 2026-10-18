@@ -1,9 +1,8 @@
 from uuid import uuid4
 
 import pytest
-from httpx import ASGITransport, AsyncClient
-
-from app.main import app
+from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 def unique_category_name() -> str:
@@ -11,15 +10,16 @@ def unique_category_name() -> str:
 
 
 @pytest.mark.asyncio
-async def test_create_category() -> None:
+async def test_create_category(
+    inventory_session: AsyncSession, authenticated_inventory_client: AsyncClient
+) -> None:
     category_name = unique_category_name()
-    transport = ASGITransport(app=app)
 
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.post(
-            "/inventory/categories",
-            json={"name": category_name},
-        )
+    client = authenticated_inventory_client
+    response = await client.post(
+        "/inventory/categories",
+        json={"name": category_name},
+    )
 
     assert response.status_code == 201
 
@@ -30,24 +30,24 @@ async def test_create_category() -> None:
 
 
 @pytest.mark.asyncio
-async def test_list_categories() -> None:
-    transport = ASGITransport(app=app)
-
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.get("/inventory/categories")
+async def test_list_categories(
+    inventory_session: AsyncSession, authenticated_inventory_client: AsyncClient
+) -> None:
+    client = authenticated_inventory_client
+    response = await client.get("/inventory/categories")
 
     assert response.status_code == 200
     assert isinstance(response.json(), list)
 
 
 @pytest.mark.asyncio
-async def test_create_category_with_invalid_name() -> None:
-    transport = ASGITransport(app=app)
-
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.post(
-            "/inventory/categories",
-            json={"name": "AB"},
-        )
+async def test_create_category_with_invalid_name(
+    inventory_session: AsyncSession, authenticated_inventory_client: AsyncClient
+) -> None:
+    client = authenticated_inventory_client
+    response = await client.post(
+        "/inventory/categories",
+        json={"name": "AB"},
+    )
 
     assert response.status_code == 422

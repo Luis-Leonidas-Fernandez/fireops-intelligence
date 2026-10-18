@@ -5,10 +5,15 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.database.session import get_database_session
+from app.modules.auth.dependencies import require_authenticated_user
 from app.modules.inventory.register_asset.schemas import RegisterAssetResponse
 from app.modules.inventory.shared.models import Asset
 
-router = APIRouter(prefix="/inventory/assets", tags=["Inventory"])
+router = APIRouter(
+    prefix="/inventory/assets",
+    tags=["Inventory"],
+    dependencies=[Depends(require_authenticated_user)],
+)
 DatabaseSession = Annotated[AsyncSession, Depends(get_database_session)]
 
 
@@ -18,6 +23,7 @@ def asset_response(asset: Asset) -> RegisterAssetResponse:
         internal_code=asset.codigo_interno,
         name=asset.nombre,
         category_id=asset.categoria_id,
+        location_id=asset.ubicacion_id,
     )
 
 
@@ -28,9 +34,7 @@ async def list_assets(session: DatabaseSession) -> list[RegisterAssetResponse]:
 
 
 @router.get("/{asset_id}", response_model=RegisterAssetResponse)
-async def get_asset(
-    asset_id: int, session: DatabaseSession
-) -> RegisterAssetResponse:
+async def get_asset(asset_id: int, session: DatabaseSession) -> RegisterAssetResponse:
     asset = await session.get(Asset, asset_id)
     if asset is None:
         raise HTTPException(

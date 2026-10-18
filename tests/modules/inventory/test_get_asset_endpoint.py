@@ -1,52 +1,11 @@
-from collections.abc import AsyncIterator
 from uuid import uuid4
 
 import pytest
-import pytest_asyncio
-from httpx import ASGITransport, AsyncClient
-from sqlalchemy import delete, select, text
+from httpx import AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.infrastructure.database.session import engine, get_database_session
-from app.main import app
 from app.modules.inventory.shared.models import Asset, Category
-
-_MISSING = object()
-
-
-@pytest_asyncio.fixture
-async def isolated_asset_session() -> AsyncIterator[AsyncSession]:
-    async with engine.connect() as connection:
-        outer_transaction = await connection.begin()
-        try:
-            database_name = await connection.scalar(text("SELECT current_database()"))
-            if database_name != "fireassets_test":
-                raise RuntimeError("Task 06 tests require fireassets_test")
-
-            async with AsyncSession(
-                bind=connection,
-                join_transaction_mode="create_savepoint",
-                expire_on_commit=False,
-            ) as session:
-                await session.execute(delete(Asset))
-                await session.commit()  # Confirma el SAVEPOINT, no la transacción externa.
-
-                previous = app.dependency_overrides.get(get_database_session, _MISSING)
-
-                async def override_database_session() -> AsyncIterator[AsyncSession]:
-                    yield session
-
-                app.dependency_overrides[get_database_session] = override_database_session
-                try:
-                    yield session
-                finally:
-                    if previous is _MISSING:
-                        app.dependency_overrides.pop(get_database_session, None)
-                    else:
-                        app.dependency_overrides[get_database_session] = previous
-        finally:
-            if outer_transaction.is_active:
-                await outer_transaction.rollback()
 
 
 async def create_category(session: AsyncSession, kind: str) -> Category:
@@ -73,24 +32,26 @@ async def create_asset(
 
 
 @pytest.mark.asyncio
-async def test_list_assets_empty(isolated_asset_session: AsyncSession) -> None:
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.get("/inventory/assets/")
+async def test_list_assets_empty(
+    inventory_session: AsyncSession, authenticated_inventory_client: AsyncClient
+) -> None:
+    client = authenticated_inventory_client
+    response = await client.get("/inventory/assets/")
 
     assert response.status_code == 200
     assert response.json() == []
 
 
 @pytest.mark.asyncio
-async def test_list_assets_ordered(isolated_asset_session: AsyncSession) -> None:
-    hose_category = await create_category(isolated_asset_session, "Mangueras")
-    helmet_category = await create_category(isolated_asset_session, "Cascos")
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
-        hose = await create_asset(client, hose_category.id, "Manguera de prueba")
-        helmet = await create_asset(client, helmet_category.id, "Casco de prueba")
-        response = await client.get("/inventory/assets/")
+async def test_list_assets_ordered(
+    inventory_session: AsyncSession, authenticated_inventory_client: AsyncClient
+) -> None:
+    hose_category = await create_category(inventory_session, "Mangueras")
+    helmet_category = await create_category(inventory_session, "Cascos")
+    client = authenticated_inventory_client
+    hose = await create_asset(client, hose_category.id, "Manguera de prueba")
+    helmet = await create_asset(client, helmet_category.id, "Casco de prueba")
+    response = await client.get("/inventory/assets/")
 
     assert response.status_code == 200
     items = response.json()
@@ -98,38 +59,50 @@ async def test_list_assets_ordered(isolated_asset_session: AsyncSession) -> None
     assert [item["id"] for item in items] == sorted([hose["id"], helmet["id"]])
     assert {item["id"] for item in items} == {hose["id"], helmet["id"]}
     assert all(
-        set(item) == {"id", "internal_code", "name", "category_id"}
+        set(item) == {"id", "internal_code", "name", "category_id", "location_id"}
         for item in items
     )
+    assert all(item["location_id"] is None for item in items)
     assert {item["category_id"] for item in items} == {
-        hose_category.id, helmet_category.id
+        hose_category.id,
+        helmet_category.id,
     }
 
 
 @pytest.mark.asyncio
-async def test_get_asset_existing(isolated_asset_session: AsyncSession) -> None:
-    category = await create_category(isolated_asset_session, "Mangueras")
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
-        created = await create_asset(client, category.id, "Manguera de prueba")
-        response = await client.get(f"/inventory/assets/{created['id']}")
+async def test_get_asset_existing(
+    inventory_session: AsyncSession, authenticated_inventory_client: AsyncClient
+) -> None:
+    category = await create_category(inventory_session, "Mangueras")
+    client = authenticated_inventory_client
+    created = await create_asset(client, category.id, "Manguera de prueba")
+    response = await client.get(f"/inventory/assets/{created['id']}")
 
     assert response.status_code == 200
     assert response.json() == created
-    assert set(response.json()) == {"id", "internal_code", "name", "category_id"}
+    assert set(response.json()) == {
+        "id",
+        "internal_code",
+        "name",
+        "category_id",
+        "location_id",
+    }
+    assert response.json()["location_id"] is None
 
 
 @pytest.mark.asyncio
-async def test_get_asset_missing(isolated_asset_session: AsyncSession) -> None:
-    category = await create_category(isolated_asset_session, "Cascos")
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
-        created = await create_asset(client, category.id, "Casco de prueba")
-        missing_id = int(created["id"]) + 1
-        assert await isolated_asset_session.scalar(
-            select(Asset.id).where(Asset.id == missing_id)
-        ) is None
-        response = await client.get(f"/inventory/assets/{missing_id}")
+async def test_get_asset_missing(
+    inventory_session: AsyncSession, authenticated_inventory_client: AsyncClient
+) -> None:
+    category = await create_category(inventory_session, "Cascos")
+    client = authenticated_inventory_client
+    created = await create_asset(client, category.id, "Casco de prueba")
+    missing_id = int(created["id"]) + 1
+    assert (
+        await inventory_session.scalar(select(Asset.id).where(Asset.id == missing_id))
+        is None
+    )
+    response = await client.get(f"/inventory/assets/{missing_id}")
 
     assert response.status_code == 404
     assert response.json() == {
@@ -142,10 +115,11 @@ async def test_get_asset_missing(isolated_asset_session: AsyncSession) -> None:
 
 
 @pytest.mark.asyncio
-async def test_get_asset_invalid_id(isolated_asset_session: AsyncSession) -> None:
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.get("/inventory/assets/not-an-id")
+async def test_get_asset_invalid_id(
+    inventory_session: AsyncSession, authenticated_inventory_client: AsyncClient
+) -> None:
+    client = authenticated_inventory_client
+    response = await client.get("/inventory/assets/not-an-id")
 
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "VALIDATION_ERROR"

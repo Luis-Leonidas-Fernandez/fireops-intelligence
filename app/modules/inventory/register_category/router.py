@@ -6,13 +6,18 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.database.session import get_database_session
+from app.modules.auth.dependencies import require_authenticated_user
 from app.modules.inventory.register_category.schemas import (
     CategoryResponse,
     CreateCategoryRequest,
 )
 from app.modules.inventory.shared.models import Category
 
-router = APIRouter(prefix="/inventory/categories", tags=["Inventory"])
+router = APIRouter(
+    prefix="/inventory/categories",
+    tags=["Inventory"],
+    dependencies=[Depends(require_authenticated_user)],
+)
 DatabaseSession = Annotated[AsyncSession, Depends(get_database_session)]
 
 

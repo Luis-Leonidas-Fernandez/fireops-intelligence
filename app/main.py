@@ -18,6 +18,11 @@ from app.modules.inventory.register_asset.router import router as register_asset
 from app.modules.inventory.register_category.router import (
     router as register_category_router,
 )
+from app.modules.inventory.register_location.router import (
+    router as register_location_router,
+)
+from app.modules.inventory.transfer_asset.router import router as transfer_asset_router
+from app.modules.inventory.update_asset.router import router as update_asset_router
 from app.shared.errors.application_error import ApplicationError
 from app.shared.errors.authentication_error import AuthenticationError
 from app.shared.errors.handlers import (
@@ -60,8 +65,11 @@ app.add_exception_handler(Exception, unexpected_error_handler)
 
 app.include_router(register_asset_router)
 app.include_router(register_category_router)
+app.include_router(register_location_router)
+app.include_router(transfer_asset_router)
 app.include_router(auth_router)
 app.include_router(get_asset_router)
+app.include_router(update_asset_router)
 
 frontend_dir = Path(__file__).resolve().parent.parent / "frontend"
 app.mount("/css", StaticFiles(directory=frontend_dir / "css"), name="frontend-css")
