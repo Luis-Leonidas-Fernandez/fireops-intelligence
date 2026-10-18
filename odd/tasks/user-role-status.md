@@ -33,7 +33,7 @@ Reflect the existing physical model's `roles` catalog, `usuarios.rol_id`, and `u
 - Delivery strategy: ask-on-risk; forecast about 300 authored changed lines, not a hard limit.
 - Runtime boundary: local ASGI/auth tests and PostgreSQL migration in `fireassets_test`; no frontend behavior changes.
 - Rollback boundary: revert the new role migration, ORM mapping, tests, and matching documentation together; preserve current auth and inventory behavior.
-- Commit pending; no push or merge has been performed.
+- Commit: `c283da4` (`feat(auth): add supervisor and administrator roles`). No push or merge has been performed.
 
 ## Progress evidence
 
