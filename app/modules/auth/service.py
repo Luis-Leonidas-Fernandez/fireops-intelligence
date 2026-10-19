@@ -3,6 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modules.auth.invitations.service import consume_invitation, lock_invitation
 from app.modules.auth.models import User
 from app.modules.auth.validations.passwords import hash_password, verify_password
 from app.shared.errors.authentication_error import AuthenticationError
@@ -10,7 +11,8 @@ from app.shared.errors.conflict_error import ConflictError
 
 
 async def register_user(
-    session: AsyncSession, email: str, password: str, display_name: str | None = None
+    session: AsyncSession, email: str, password: str, display_name: str | None = None,
+    invitation_token: str | None = None,
 ) -> User:
     existing = await session.scalar(select(User.id).where(User.email == email))
     if existing is not None:
@@ -18,8 +20,10 @@ async def register_user(
             code="EMAIL_ALREADY_REGISTERED", message="Ese correo ya está registrado."
         )
 
+    invitation = await lock_invitation(session, email, invitation_token)
     password_hash = await run_in_threadpool(hash_password, password)
-    user = User(email=email, password_hash=password_hash, display_name=display_name)
+    user = User(email=email, password_hash=password_hash, display_name=display_name, rol_id=invitation.rol_id)
+    consume_invitation(invitation)
     session.add(user)
     try:
         await session.commit()

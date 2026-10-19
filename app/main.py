@@ -1,13 +1,19 @@
 from pathlib import Path
+from typing import Annotated
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.config.settings import get_settings
+from app.infrastructure.database.session import get_database_session
+from app.modules.auth.dependencies import current_user_id
+from app.modules.auth.invitations.router import require_admin
+from app.modules.auth.models import User
 from app.modules.auth.router import router as auth_router
 from app.modules.auth.validations.tokens import (
     ACCESS_TOKEN_COOKIE,
@@ -42,7 +48,7 @@ app = FastAPI(
 async def prevent_stale_frontend_assets(request: Request, call_next):
     response = await call_next(request)
     path = request.url.path
-    if path in {"/", "/registro", "/iniciar-sesion"} or path.startswith(
+    if path in {"/", "/registro", "/iniciar-sesion", "/solicitudes"} or path.startswith(
         ("/css/", "/js/", "/auth/")
     ):
         response.headers["Cache-Control"] = "no-store"
@@ -91,6 +97,19 @@ async def root(request: Request) -> FileResponse | RedirectResponse:
 @app.get("/registro", include_in_schema=False)
 async def registration_page() -> FileResponse:
     return FileResponse(frontend_dir / "pages" / "registro" / "index.html")
+
+
+@app.get("/solicitudes", include_in_schema=False, response_model=None)
+async def review_page(
+    request: Request,
+    session: Annotated[AsyncSession, Depends(get_database_session)],
+) -> FileResponse | RedirectResponse:
+    user_id = current_user_id(request)
+    actor = await session.get(User, user_id) if user_id is not None else None
+    if actor is None:
+        return RedirectResponse("/iniciar-sesion", status_code=303)
+    await require_admin(session, actor)
+    return FileResponse(frontend_dir / "pages" / "solicitudes" / "index.html")
 
 
 @app.get("/iniciar-sesion", include_in_schema=False)

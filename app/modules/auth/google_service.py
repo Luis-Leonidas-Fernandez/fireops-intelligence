@@ -5,10 +5,17 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.auth.google_oauth import GoogleIdentity, GoogleOAuthFailure
+from app.modules.auth.invitations.service import (
+    consume_invitation,
+    lock_invitation_digest,
+)
 from app.modules.auth.models import User
+from app.shared.errors.application_error import ApplicationError
 
 
-async def sign_in_with_google(session: AsyncSession, identity: GoogleIdentity) -> User:
+async def sign_in_with_google(
+    session: AsyncSession, identity: GoogleIdentity, invitation_hash: str | None = None
+) -> User:
     linked = await session.scalar(select(User).where(User.google_sub == identity.sub))
     if linked is not None:
         if linked.display_name is None and identity.display_name is not None:
@@ -22,13 +29,20 @@ async def sign_in_with_google(session: AsyncSession, identity: GoogleIdentity) -
             raise GoogleOAuthFailure("GOOGLE_ACCOUNT_CONFLICT")
         raise GoogleOAuthFailure("GOOGLE_LINK_REQUIRED")
 
+    try:
+        invitation = await lock_invitation_digest(session, identity.email, invitation_hash)
+    except ApplicationError as error:
+        raise GoogleOAuthFailure(error.code) from error
+
     user = User(
         email=identity.email,
         display_name=identity.display_name,
         password_hash=None,
         google_sub=identity.sub,
+        rol_id=invitation.rol_id,
     )
     session.add(user)
+    consume_invitation(invitation)
     try:
         await session.commit()
         await session.refresh(user)

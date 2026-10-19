@@ -24,7 +24,7 @@ class Element {
   querySelector(selector) { return this.children?.[selector] || null; }
 }
 
-function harness(mode = 'login', search = '') {
+function harness(mode = 'login', search = '', hash = '') {
   const form = new Element();
   const button = new Element();
   const label = new Element();
@@ -41,7 +41,7 @@ function harness(mode = 'login', search = '') {
   const errors = Object.fromEntries(['displayName', 'email', 'password', 'repeatPassword'].map((key) => [key, new Element()]));
   button.children = { '.button-label': label, '.particle-loader': loader };
   form.children = {
-    '.submit-button': button, '.form-status': status,
+    '.submit-button': button, '.form-status': status, '.google-button': googleButton,
     '#display-name': mode === 'register' ? displayName : null,
     '#email': email, '#password': password,
     '#password-repeat': mode === 'register' ? repeatPassword : null,
@@ -49,13 +49,21 @@ function harness(mode = 'login', search = '') {
   };
   dialog.children = { '.modal-message': dialogMessage, '.modal-close': closeButton };
 
-  const location = { path: null, search, pathname: mode === 'login' ? '/iniciar-sesion' : '/registro', assign(value) { this.path = value; } };
+  const location = { path: null, search, hash, pathname: mode === 'login' ? '/iniciar-sesion' : '/registro', assign(value) { this.path = value; } };
   let callback;
   let requests = 0;
   let lastRequest;
   let fetchResult = async () => ({ ok: true, json: async () => ({ message: 'Correcto.' }) });
   const window = { location, history: { replaceState(_state, _title, path) { location.cleanedPath = path; } }, setTimeout(fn) { callback = fn; } };
   const document = {
+    body: { append(element) { this.lastAppended = element; } },
+    createElement(tag) {
+      const element = new Element();
+      element.tag = tag;
+      element.append = (child) => { element.child = child; };
+      element.submit = () => { element.submitted = true; };
+      return element;
+    },
     querySelector(selector) {
       if (selector === '#auth-error-dialog') return dialog;
       if (selector === '.google-button') return googleButton;
@@ -73,7 +81,7 @@ function harness(mode = 'login', search = '') {
   password.value = 'ClaveSegura123';
   repeatPassword.value = password.value;
   return {
-    window, form, button, label, loader, status, displayName, email, password, repeatPassword,
+    window, document, form, button, label, loader, status, displayName, email, password, repeatPassword,
     dialog, dialogMessage, closeButton, googleButton, errors, location,
     get requests() { return requests; },
     get lastRequest() { return lastRequest; },
@@ -135,10 +143,33 @@ test('Google button starts server-side OAuth without granting a local session', 
   assert.equal(ui.googleButton.attributes['aria-busy'], 'true');
 });
 
-test('registration Google button preserves its source', () => {
+test('registration Google button posts invitation without putting it in the URL', () => {
+  const ui = harness('register', '', '#invite=test-invitation-token');
+  ui.googleButton.listeners.click();
+  assert.equal(ui.location.path, null);
+  const redirect = ui.document.body.lastAppended;
+  assert.equal(redirect.method, 'POST');
+  assert.equal(redirect.action, '/auth/google/start?flow=signin&source=register');
+  assert.equal(redirect.child.name, 'invitation_token');
+  assert.equal(redirect.child.value, 'test-invitation-token');
+  assert.equal(redirect.submitted, true);
+  assert.equal(ui.googleButton.disabled, true);
+  assert.equal(ui.googleButton.attributes['aria-busy'], 'true');
+  assert.equal(ui.location.hash, '#invite=test-invitation-token');
+});
+
+test('registration without invitation refuses Google before provider redirect', () => {
   const ui = harness('register');
   ui.googleButton.listeners.click();
-  assert.equal(ui.location.path, '/auth/google/start?flow=signin&source=register');
+  assert.equal(ui.dialog.dataset.errorCode, 'INVITATION_INVALID');
+  assert.equal(ui.location.path, null);
+});
+
+test('registration without invitation does not submit credentials', async () => {
+  const ui = harness('register');
+  await ui.submit();
+  assert.equal(ui.requests, 0);
+  assert.equal(ui.dialog.dataset.errorCode, 'INVITATION_INVALID');
 });
 
 test('Google callback error is shown in a controlled modal and removed from URL', () => {
@@ -149,11 +180,12 @@ test('Google callback error is shown in a controlled modal and removed from URL'
 });
 
 test('valid registration submits and redirects only after success', async () => {
-  const ui = harness('register');
+  const ui = harness('register', '', '#invite=test-invitation-token');
   ui.displayName.value = '  Ana   Pérez  ';
   await ui.submit();
   assert.equal(ui.requests, 1);
   assert.equal(JSON.parse(ui.lastRequest[1].body).display_name, 'Ana Pérez');
+  assert.equal(JSON.parse(ui.lastRequest[1].body).invitation_token, 'test-invitation-token');
   assert.equal(ui.status.dataset.state, 'success');
   ui.redirect();
   assert.equal(ui.location.path, '/');

@@ -19,6 +19,7 @@ class CredentialsRequest(BaseModel):
 
 class RegisterRequest(CredentialsRequest):
     display_name: str | None = None
+    invitation_token: str | None = Field(default=None, max_length=256)
 
     @field_validator("display_name")
     @classmethod

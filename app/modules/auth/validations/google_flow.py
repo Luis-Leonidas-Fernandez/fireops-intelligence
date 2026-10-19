@@ -22,9 +22,12 @@ class GoogleFlow:
     source: str
     flow: str
     user_id: int | None
+    invitation_hash: str | None = None
 
 
-def new_google_flow(flow: str, source: str, user_id: int | None) -> GoogleFlow:
+def new_google_flow(
+    flow: str, source: str, user_id: int | None, invitation_hash: str | None = None
+) -> GoogleFlow:
     return GoogleFlow(
         attempt_id=new_attempt_id(),
         state=secrets.token_urlsafe(32),
@@ -33,6 +36,7 @@ def new_google_flow(flow: str, source: str, user_id: int | None) -> GoogleFlow:
         source=source,
         flow=flow,
         user_id=user_id,
+        invitation_hash=invitation_hash,
     )
 
 
@@ -47,6 +51,7 @@ def encode_google_flow(flow: GoogleFlow, secret_key: str) -> str:
             "source": flow.source,
             "flow": flow.flow,
             "user_id": flow.user_id,
+            "invitation_hash": flow.invitation_hash,
             "exp": datetime.now(UTC) + GOOGLE_FLOW_TTL,
         },
         secret_key,
@@ -60,17 +65,35 @@ def decode_google_flow(token: str, secret_key: str) -> GoogleFlow:
             token,
             secret_key,
             algorithms=["HS256"],
-            options={"require": ["type", "attempt_id", "state", "nonce", "verifier", "source", "flow", "exp"]},
+            options={
+                "require": [
+                    "type",
+                    "attempt_id",
+                    "state",
+                    "nonce",
+                    "verifier",
+                    "source",
+                    "flow",
+                    "exp",
+                ]
+            },
         )
         if claims["type"] != "google_oauth":
             raise ValueError("Wrong token type")
         if claims["flow"] not in {"signin", "link"}:
             raise ValueError("Wrong flow")
-        if claims["source"] not in {"login", "register", "dashboard"}:
+        if claims["source"] not in {"login", "register", "dashboard", "request"}:
             raise ValueError("Wrong source")
         if (claims["flow"] == "link") != (claims["source"] == "dashboard"):
             raise ValueError("Flow/source mismatch")
         user_id = claims.get("user_id")
+        invitation_hash = claims.get("invitation_hash")
+        if invitation_hash is not None and (
+            not isinstance(invitation_hash, str)
+            or len(invitation_hash) != 64
+            or any(char not in "0123456789abcdef" for char in invitation_hash)
+        ):
+            raise ValueError("Invalid invitation hash")
         if claims["flow"] == "link" and (type(user_id) is not int or user_id <= 0):
             raise ValueError("Missing link user")
         for key in ("state", "nonce", "verifier"):
@@ -91,6 +114,7 @@ def decode_google_flow(token: str, secret_key: str) -> GoogleFlow:
             source=claims["source"],
             flow=claims["flow"],
             user_id=user_id,
+            invitation_hash=invitation_hash,
         )
     except (jwt.PyJWTError, KeyError, ValueError, TypeError) as error:
         raise GoogleOAuthFailure("GOOGLE_SESSION_EXPIRED") from error

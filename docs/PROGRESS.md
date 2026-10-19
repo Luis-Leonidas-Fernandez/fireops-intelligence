@@ -8,23 +8,40 @@ Al finalizar una jornada, decime `cerramos la jornada`. Se agregará una nueva f
 
 ## Estado actual
 
+> Actualización local del 19 de octubre: el registro es solicitado por la persona y revisado por un administrador autenticado; la descripción de invitaciones emitidas por administradores que sigue abajo es histórica. No se verificó el envío real de Gmail.
+
+- `POST /auth/registration-requests` acepta solicitudes por correo con respuesta genérica, sin crear cuenta. Google verifica state/nonce/PKCE antes de registrar la solicitud.
+- `GET /auth/registration-requests` y `POST /auth/registration-requests/{id}/review` requieren rol `ADMINISTRADOR`; la aprobación envía un enlace de alta para `SUPERVISOR`. La revisión `a4d9c2b7e631` se aplicó solo a `fireassets_test` después de verificar URL efectiva y `SELECT current_database()`. Consultá [la guía vigente](getting-started/registration-approval.md).
+
+
+- `POST /auth/invitations` permite al administrador activo invitar un correo exacto como `ADMINISTRADOR` o `SUPERVISOR`. El envío utiliza Gmail API con una autorización `gmail.send` separada del OAuth de inicio de sesión. La [guía de configuración](getting-started/gmail-invitations.md) enumera las variables privadas sin valores reales. La prueba de envío real queda pendiente hasta contar con la casilla remitente autorizada y su refresh token.
+- El alta por contraseña y la primera alta por Google consumen un token único de 48 horas almacenado solo como hash; las cuentas existentes siguen iniciando sesión sin una invitación nueva. La revisión `f09a6e2112b4` se aplicó exclusivamente a `fireassets_test` local tras confirmar la URL efectiva y `SELECT current_database()`.
+- Las once rutas de inventario requieren un usuario activo con rol activo `ADMINISTRADOR` o `SUPERVISOR`. La base de prueba local tiene las asignaciones acordadas; esas filas no viajan con Git.
+
 - La migración `0374d9a573a1` define `categorias` y `bienes`, con clave foránea de bien a categoría. Cada integrante debe aplicarla en su propia base; este archivo no confirma el estado de cada PostgreSQL local.
 - Están implementados `POST /inventory/assets`, `POST /inventory/categories` y `GET /inventory/categories`. La Task 05 fue completada y el equipo confirmó sus pruebas en sus entornos en septiembre.
 - `POST /inventory/assets` ahora acepta una categoría existente (`category_id`) o el nombre de una nueva (`new_category_name`), nunca ambos. La categoría se reutiliza por nombre exacto si ya existe; si hay que crearla, categoría y bien se confirman juntos o se revierten juntos. El frontend todavía no tiene el formulario para esta opción.
 - La **Task 06 está implementada y verificada localmente**: `GET /inventory/assets/` lista bienes ordenados por ID y `GET /inventory/assets/{asset_id}` consulta uno o devuelve `404`. El router está registrado y los tests de esta tarea usan una transacción externa con SAVEPOINT y rollback por prueba. Falta confirmar la ejecución en los entornos de los demás integrantes antes de archivarla como completada por el equipo.
 - FastAPI sirve un dashboard HTML/CSS/JS en `/`, registro en `/registro` e inicio de sesión en `/iniciar-sesion`. Registro y acceso con correo/contraseña funcionan mediante `POST /auth/register` y `POST /auth/login`; `POST /auth/logout` borra la cookie de sesión. Sin cookie válida, `/` redirige a `/iniciar-sesion`.
 - Dashboard: diseño responsive, acento rojo, modo claro/oscuro, datos ilustrativos y conteo real de categorías. Las cifras, movimientos, alertas y CSV son demostraciones; no representan el inventario de PostgreSQL.
-- Los formularios validan los datos, muestran carga, éxito o error y solo redirigen tras una respuesta correcta. El botón Google inicia OAuth en el backend cuando el entorno está configurado; un usuario local puede vincularlo explícitamente desde su perfil. «Cerrar sesión» solicita eliminar la cookie y vuelve al inicio de sesión; si la petición falla, la navegación igualmente ocurre y el borrado no queda garantizado. **Las once rutas de inventario exigen ahora una sesión local válida y un usuario existente** mediante una dependencia compartida; faltan permisos por rol.
+- Los formularios validan los datos, muestran carga, éxito o error y solo redirigen tras una respuesta correcta. El botón Google inicia OAuth en el backend cuando el entorno está configurado; un usuario local puede vincularlo explícitamente desde su perfil. «Cerrar sesión» solicita eliminar la cookie y vuelve al inicio de sesión; si la petición falla, la navegación igualmente ocurre y el borrado no queda garantizado. **Las once rutas de inventario exigen una sesión local válida y uno de los dos roles activos permitidos** mediante una dependencia compartida.
 - La migración `b70e8e0479aa` agrega `usuarios`; la revisión `c4e9f1d2a7b3` permite contraseña opcional y añade `google_sub` único. Ambas están aplicadas en `fireassets_test` de esta máquina; cada integrante debe migrar su propia base.
 - La revisión `d8b6e2f1940a` añade un nombre de perfil opcional y ya está aplicada en `fireassets_test` local. El app bar consulta `GET /auth/me` y muestra el nombre autenticado o, si falta, el correo; no usa un usuario ficticio. Cada integrante debe aplicar la migración en su propia base de prueba.
 - La revisión `e42c7910b6af` agrega ubicaciones físicas y vehiculares con relación opcional desde bienes, restricciones de integridad y prevención de ciclos. Está aplicada solo en `fireassets_test` local. Existen `POST`/`GET` de ubicaciones y los bienes aceptan `location_id` opcional. El resto del equipo aún debe verificar su propia base antes de migrar.
 - La revisión `a6a239f7b4dc` agrega el historial `movimientos`. Un usuario autenticado puede trasladar un bien entre ubicaciones activas; la ubicación actual y el movimiento se guardan juntos, y puede consultar el historial del bien. Está aplicada solo en `fireassets_test` local.
-- La revisión `e7d4c2f9a621` agrega el catálogo de roles (`ADMINISTRADOR` y `SUPERVISOR`) y `usuarios.rol_id` nullable / `usuarios.activo` con valor inicial verdadero. Se aplicó solo en `fireassets_test` local: no asigna roles ni implementa permisos o invitaciones.
+- La revisión `e7d4c2f9a621` agrega el catálogo de roles (`ADMINISTRADOR` y `SUPERVISOR`) y `usuarios.rol_id` nullable / `usuarios.activo` con valor inicial verdadero. Se aplicó solo en `fireassets_test` local; las asignaciones de cuentas se hicieron por separado. Los permisos e invitaciones se implementaron después.
 - La revisión `c15b4e3d9a20` crea `auditoria_cambios` según el modelo físico 1.1; está aplicada solo en `fireassets_test` local. `PATCH /inventory/assets/{asset_id}` corrige código interno, nombre o categoría con un motivo obligatorio y guarda el cambio y su auditoría en una sola transacción. La ubicación solo se cambia mediante traslados. La edición requiere sesión, pero todavía no aplica permisos por rol ni invitaciones.
 - `scripts/test-up.sh` y `scripts/test-up.ps1` inician API y web con `.venv` y `.env.test`, verificando que la URL apunte a `fireassets_test`; no crean la base ni ejecutan migraciones.
 - La guía de SQLTools sigue en `vscode-tools.md`. `docs/README.md` organiza las guías, la arquitectura actual y los ADR. Los tests de autenticación y de Task 06 disponen de fixtures transaccionales propias; los tests anteriores de inventario no comparten todavía esa infraestructura.
 
 ## Registro de jornadas
+
+### 2026-10-18 — invitaciones (trabajo local)
+
+- Se añadió emisión de invitaciones de texto simple por Gmail API desde un endpoint exclusivo para administradores. El remitente requiere refresh token propio con `gmail.send`; las pruebas usan un proveedor simulado y nunca envían correos reales.
+- Se cerró el registro abierto por contraseña y Google. El token de invitación viaja en el fragmento del enlace y en el cuerpo de la solicitud, se almacena como hash y se consume junto con la cuenta nueva. Los roles se asignan desde la invitación, no desde un valor enviado por el invitado.
+- Se verificó por lectura la URL efectiva y la base real `fireassets_test` antes de aplicar la revisión `f09a6e2112b4`. No se migró `fireassets`. La suite completa aprobó **210 tests Python** y **14 tests frontend**; Ruff y mypy de los módulos modificados aprobaron, y `alembic check` no detectó diferencias.
+
 
 ### 2026-10-18
 

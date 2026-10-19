@@ -57,3 +57,44 @@ class User(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
     role: Mapped[Role | None] = relationship(back_populates="users")
+
+
+class Invitation(Base):
+    __tablename__ = "auth_invitations"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    email: Mapped[str] = mapped_column(String(320), nullable=False, index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    rol_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("roles.id"), nullable=False
+    )
+    invited_by_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("usuarios.id"), nullable=False
+    )
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    used_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class RegistrationRequest(Base):
+    __tablename__ = "auth_registration_requests"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    email: Mapped[str] = mapped_column(String(320), unique=True, nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(20), nullable=False, server_default=text("'pending'")
+    )
+    source: Mapped[str] = mapped_column(String(20), nullable=False)
+    requested_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    reviewed_by_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("usuarios.id")
+    )

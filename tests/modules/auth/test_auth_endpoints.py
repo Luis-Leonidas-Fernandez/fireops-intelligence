@@ -13,6 +13,7 @@ from app.modules.auth.validations.tokens import (
     ACCESS_TOKEN_COOKIE,
     validate_access_token,
 )
+from tests.modules.auth.conftest import create_test_invitation
 
 
 def unique_email() -> str:
@@ -24,12 +25,13 @@ async def test_register_persists_hashed_password_and_sets_session(
     auth_session: AsyncSession,
 ) -> None:
     email = unique_email()
+    token = await create_test_invitation(auth_session, email)
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
         response = await client.post(
             "/auth/register",
-            json={"email": email.upper(), "password": "ClaveSegura123"},
+            json={"email": email.upper(), "password": "ClaveSegura123", "invitation_token": token},
         )
         dashboard = await client.get("/")
 
@@ -83,11 +85,12 @@ async def test_register_rejects_weak_password(auth_session: AsyncSession) -> Non
 @pytest.mark.asyncio
 async def test_register_rejects_duplicate_email(auth_session: AsyncSession) -> None:
     email = unique_email()
+    token = await create_test_invitation(auth_session, email)
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
         first = await client.post(
-            "/auth/register", json={"email": email, "password": "ClaveSegura123"}
+            "/auth/register", json={"email": email, "password": "ClaveSegura123", "invitation_token": token}
         )
         second = await client.post(
             "/auth/register",
@@ -107,11 +110,12 @@ async def test_login_valid_credentials_returns_session(
     auth_session: AsyncSession,
 ) -> None:
     email = unique_email()
+    token = await create_test_invitation(auth_session, email)
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
         await client.post(
-            "/auth/register", json={"email": email, "password": "ClaveSegura123"}
+            "/auth/register", json={"email": email, "password": "ClaveSegura123", "invitation_token": token}
         )
         response = await client.post(
             "/auth/login", json={"email": email.upper(), "password": "ClaveSegura123"}
@@ -132,11 +136,12 @@ async def test_login_rejects_wrong_password_and_unknown_user(
     auth_session: AsyncSession,
 ) -> None:
     email = unique_email()
+    token = await create_test_invitation(auth_session, email)
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
         await client.post(
-            "/auth/register", json={"email": email, "password": "ClaveSegura123"}
+            "/auth/register", json={"email": email, "password": "ClaveSegura123", "invitation_token": token}
         )
         wrong = await client.post(
             "/auth/login", json={"email": email, "password": "OtraClave999"}
@@ -165,12 +170,14 @@ async def test_login_rejects_invalid_input(auth_session: AsyncSession) -> None:
 async def test_logout_clears_cookie_and_dashboard_access(
     auth_session: AsyncSession,
 ) -> None:
+    email = unique_email()
+    token = await create_test_invitation(auth_session, email)
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
         await client.post(
             "/auth/register",
-            json={"email": unique_email(), "password": "ClaveSegura123"},
+            json={"email": email, "password": "ClaveSegura123", "invitation_token": token},
         )
         logout = await client.post("/auth/logout")
         dashboard = await client.get("/")
@@ -183,13 +190,15 @@ async def test_logout_clears_cookie_and_dashboard_access(
 async def test_profile_uses_session_and_registered_name(
     auth_session: AsyncSession,
 ) -> None:
+    email = unique_email()
+    token = await create_test_invitation(auth_session, email)
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         anonymous = await client.get("/auth/me")
         assert anonymous.status_code == 401
         registered = await client.post(
             "/auth/register",
             json={
-                "email": unique_email(), "password": "ClaveSegura123",
+                "email": email, "password": "ClaveSegura123", "invitation_token": token,
                 "display_name": "  María   Fernández  ",
             },
         )
@@ -206,9 +215,11 @@ async def test_profile_uses_session_and_registered_name(
 async def test_existing_user_profile_falls_back_to_email(
     auth_session: AsyncSession,
 ) -> None:
+    email = unique_email()
+    token = await create_test_invitation(auth_session, email)
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         registered = await client.post(
-            "/auth/register", json={"email": unique_email(), "password": "ClaveSegura123"}
+            "/auth/register", json={"email": email, "password": "ClaveSegura123", "invitation_token": token}
         )
         profile = await client.get("/auth/me")
     assert registered.status_code == 201

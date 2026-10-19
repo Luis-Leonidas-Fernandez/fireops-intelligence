@@ -18,6 +18,8 @@
       repeatPassword: form.querySelector("#password-repeat"),
     };
     let pending = false;
+    const invitationToken = mode === "register"
+      ? new URLSearchParams((window.location.hash || "").slice(1)).get("invite") : null;
     const googleErrors = {
       GOOGLE_NOT_CONFIGURED: "El acceso con Google no está configurado en este entorno.",
       GOOGLE_SESSION_EXPIRED: "La autorización con Google venció o no es válida. Intentá nuevamente.",
@@ -28,6 +30,8 @@
       GOOGLE_ACCOUNT_CONFLICT: "Esta cuenta de Google ya está asociada o existe un conflicto. Contactá al administrador.",
       GOOGLE_EMAIL_MISMATCH: "El correo de Google debe coincidir con el correo de tu cuenta.",
       GOOGLE_ALREADY_LINKED: "Tu cuenta ya está vinculada con otra cuenta de Google.",
+      INVITATION_INVALID: "La invitación no es válida o ya venció. Pedí una nueva.",
+      REGISTRATION_REQUEST_FAILED: "No se pudo registrar la solicitud. Intentá nuevamente.",
     };
 
     function showFieldErrors(errors) {
@@ -69,6 +73,10 @@
         fields[Object.keys(result.errors)[0]].focus();
         return;
       }
+      if (mode === "register" && !invitationToken) {
+        showError("INVITATION_INVALID", googleErrors.INVITATION_INVALID);
+        return;
+      }
 
       setLoading(true);
       try {
@@ -80,6 +88,7 @@
             email: result.email,
             password: result.password,
             ...(mode === "register" && result.displayName ? { display_name: result.displayName } : {}),
+            ...(mode === "register" ? { invitation_token: invitationToken } : {}),
           }),
         });
         const body = await response.json();
@@ -105,11 +114,28 @@
       window.history?.replaceState(null, "", window.location.pathname);
     }
 
-    document.querySelector(".google-button")?.addEventListener("click", (event) => {
-      const button = event?.currentTarget || document.querySelector(".google-button");
+    form.querySelector(".google-button")?.addEventListener("click", (event) => {
+      if (mode === "register" && !invitationToken) {
+        showError("INVITATION_INVALID", googleErrors.INVITATION_INVALID);
+        return;
+      }
+      const button = event?.currentTarget || form.querySelector(".google-button");
       button.disabled = true;
       button.setAttribute("aria-busy", "true");
-      window.location.assign(`/auth/google/start?flow=signin&source=${mode === "register" ? "register" : "login"}`);
+      if (mode === "register") {
+        const redirect = document.createElement("form");
+        redirect.method = "POST";
+        redirect.action = "/auth/google/start?flow=signin&source=register";
+        const hidden = document.createElement("input");
+        hidden.type = "hidden";
+        hidden.name = "invitation_token";
+        hidden.value = invitationToken || "";
+        redirect.append(hidden);
+        document.body.append(redirect);
+        redirect.submit();
+      } else {
+        window.location.assign("/auth/google/start?flow=signin&source=login");
+      }
     });
     dialog.querySelector(".modal-close").addEventListener("click", () => dialog.close());
 

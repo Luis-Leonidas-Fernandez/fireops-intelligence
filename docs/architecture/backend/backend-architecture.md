@@ -15,7 +15,7 @@ El alta de bienes usa `register_asset/service.py` para resolver la categoría y 
 
 Los seis routers de inventario declaran la misma dependencia `app/modules/auth/dependencies.py::require_authenticated_user`, aplicada a sus once endpoints. El helper valida la cookie local de 30 minutos y confirma que el usuario todavía existe mediante la misma `AsyncSession` de la petición; una sesión ausente, inválida, expirada o perteneciente a un usuario eliminado devuelve `401` con `error.code = AUTH_REQUIRED`. Para continuar exige `usuarios.activo = true` y un rol activo cuyo nombre sea `ADMINISTRADOR` o `SUPERVISOR`. Una cuenta autenticada sin rol, inactiva o con un rol no permitido recibe `403` con `error.code = INVENTORY_ACCESS_DENIED`. Ambos roles tienen acceso completo a las rutas de inventario actuales. El traslado y la edición reciben además el usuario autorizado para atribuir el cambio, sin repetir la consulta gracias al caché de dependencias de FastAPI.
 
-La autenticación sí separa router (`app/modules/auth/router.py`), reglas de registro/login (`service.py`), schemas (`schemas.py`), modelo `User` (`models.py`) y validadores reutilizables (`validations/`). Hash Argon2 y verificación se ejecutan en threadpool. Alembic crea la tabla `usuarios`; ningún dato de PostgreSQL llega mediante `git pull`.
+La autenticación sí separa router (`app/modules/auth/router.py`), reglas de registro/login (`service.py`), schemas (`schemas.py`), modelo `User` (`models.py`) y validadores reutilizables (`validations/`). Las invitaciones separan emisión HTTP, ciclo de vida y adaptación Gmail en `app/modules/auth/invitations/`. Hash Argon2 y verificación se ejecutan en threadpool. Alembic crea las tablas; ningún dato de PostgreSQL llega mediante `git pull`.
 
 ### Estructura implementada: rol y estado del usuario
 
@@ -24,11 +24,11 @@ El [modelo físico](../../Phase_01/data-modeling/guie.md#3-tabla-roles) incluye 
 | Elemento implementado | Transición compatible |
 |---|---|
 | `roles` | Catálogo con `id`, `nombre` único, `descripcion`, `activo`, `created_at` y `updated_at`. La migración siembra únicamente `ADMINISTRADOR` y `SUPERVISOR`; sembrar el catálogo no asigna privilegios a ninguna cuenta. |
-| `usuarios.rol_id` | Clave foránea nullable a `roles.id`. Las cuentas existentes conservarán `NULL`; ningún usuario existente ni nuevo recibirá automáticamente un rol privilegiado. Una asignación controlada posterior podrá preceder a cualquier requisito `NOT NULL`. |
+| `usuarios.rol_id` | Clave foránea nullable a `roles.id`. Las cuentas existentes conservaron su valor durante la migración; las cuentas nuevas reciben el rol de su invitación consumida. No existe rol predeterminado implícito. |
 | `usuarios.activo` | Booleano no nulo con valor predeterminado `true`, para conservar activas las cuentas existentes durante la migración. |
 | `usuarios.password_hash` | Permanece nullable: las cuentas creadas solo con Google no tienen contraseña local. |
 
-El guard de inventario ya comprueba `rol_id` y `activo`. Los roles no se asignan automáticamente al registrarse: una cuenta nueva puede iniciar sesión, pero no operar el inventario hasta recibir una asignación controlada. Las invitaciones, la administración de roles y el cierre del registro abierto son trabajo posterior. En la base de prueba local se asignaron manualmente los dos usuarios elegidos por el responsable del proyecto; esta asignación de datos no viaja mediante Git.
+El guard de inventario ya comprueba `rol_id` y `activo`. El registro abierto quedó cerrado: una cuenta nueva debe consumir una invitación válida y obtiene su rol en la misma transacción que el alta. Las cuentas existentes siguen iniciando sesión con sus datos anteriores. En la base de prueba local se asignaron manualmente los dos usuarios elegidos por el responsable del proyecto; esta asignación de datos no viaja mediante Git.
 
 El requisito RNF-SEG-02 menciona además la función de carga; queda pendiente de revisión para una fase posterior. Por decisión actual del equipo, el catálogo inicial contiene solo `ADMINISTRADOR` y `SUPERVISOR`.
 
@@ -51,10 +51,11 @@ Google agrega `google_oauth.py` para el proveedor, `google_service.py` para las 
 | `GET /inventory/locations` | `register_location` | `200`, lista de ubicaciones ordenada por ID |
 | `GET /inventory/locations/{location_id}` | `register_location` | `200` con la ubicación o `404` |
 | `POST /auth/register` | `auth/router.py` | `201`, `message` y `user`; establece cookie de sesión |
+| `POST /auth/invitations` | `auth/invitations/router.py` | `201` tras enviar; solo `ADMINISTRADOR` activo |
 | `POST /auth/login` | `auth/router.py` | `200`, `message` y `user`; establece cookie de sesión |
 | `POST /auth/logout` | `auth/router.py` | `204`; elimina cookie del navegador |
 | `GET /auth/me` | `auth/router.py` | `200`, perfil de la sesión actual (`id`, correo y nombre opcional); `401` sin sesión |
-| `GET /auth/google/start` | `auth/router.py` | `303` a Google con estado, PKCE y nonce |
+| `GET/POST /auth/google/start` | `auth/router.py` | `303` a Google con estado, PKCE y nonce; `POST` transporta la invitación en el cuerpo |
 | `GET /auth/google/callback` | `auth/router.py` | Verifica identidad y redirige con sesión local o error controlado |
 | `GET /` | `app/main.py` | Dashboard con token válido; si no, `303` a `/iniciar-sesion` |
 | `GET /health` | `app/main.py` | `200`, `{"status":"ok"}` |
@@ -83,7 +84,7 @@ Ejemplo de cuerpo para trasladar un bien existente a una ubicación activa cuyo 
 
 El `2` es ilustrativo: cada integrante debe usar un ID real de su propia base de prueba. El endpoint está disponible en `/docs` tras iniciar sesión en el mismo navegador.
 
-`POST /auth/register` y `/auth/login` reciben correo y contraseña; el registro admite además `display_name` opcional (1–120 caracteres normalizados). Se normaliza el correo; el registro exige contraseña de 8 a 128 caracteres con letras y números. La respuesta exitosa no incluye la contraseña ni el JWT. `GET /auth/me` obtiene el perfil mediante esa misma sesión y el dashboard muestra `display_name` o, si falta, el correo. El JWT HS256 dura 30 minutos y viaja en una cookie `fire_control_access` HttpOnly, SameSite=Lax (`Secure` en `ENVIRONMENT=production`). `SECRET_KEY` debe tener al menos 32 caracteres.
+`POST /auth/register` y `/auth/login` reciben correo y contraseña; el registro exige también `invitation_token` y admite `display_name` opcional (1–120 caracteres normalizados). Se normaliza el correo; el registro exige contraseña de 8 a 128 caracteres con letras y números. La respuesta exitosa no incluye la contraseña ni el JWT. La invitación tiene un token aleatorio cuyo SHA-256 único se almacena en `auth_invitations` con correo, rol, vencimiento y uso; el endpoint bloquea la fila antes de consumirse. Una alta Google nueva usa el hash en el estado OAuth firmado y también consume la invitación, mientras el login de una cuenta Google vinculada no necesita otra. `GET /auth/me` obtiene el perfil mediante esa misma sesión y el dashboard muestra `display_name` o, si falta, el correo. El JWT HS256 dura 30 minutos y viaja en una cookie `fire_control_access` HttpOnly, SameSite=Lax (`Secure` en `ENVIRONMENT=production`). `SECRET_KEY` debe tener al menos 32 caracteres. Véase la [guía de invitaciones](../../getting-started/gmail-invitations.md).
 
 ## Errores y límites
 
@@ -91,10 +92,16 @@ El `2` es ilustrativo: cada integrante debe usar un ID real de su propia base de
 - Los routers de inventario existentes capturan `IntegrityError`, hacen rollback y elevan `HTTPException(409)`; el handler global serializa esa excepción como `HTTP_409`. No es el mismo código de error de los servicios de autenticación.
 - `app/shared/errors/` centraliza `{"error":{"code":"...","message":"...","details":{...}}}`. Auth usa `ApplicationError`: correo repetido `EMAIL_ALREADY_REGISTERED` (`409`), credenciales incorrectas `INVALID_CREDENTIALS` (`401`). Los errores inesperados devuelven `500` con mensaje controlado.
 - Los `GET` de bienes de [Task 06](../../../labs/TASK_06_GET_ASSET_BY_ID.md) ya están implementados. Las rutas de ubicaciones permiten alta y consulta; el traslado se realiza desde la ruta del bien. No se implementaron edición ni baja de ubicaciones, ni otros tipos de movimiento.
-- La cookie protege la página `/` y todos los endpoints de inventario. `/docs` sigue visible sin sesión, pero llamar esas rutas sin una cookie válida devuelve `401`; con cookie válida pero sin un rol activo permitido devuelve `403`. No hay limitación de intentos de login ni revocación server-side de JWT emitidos. El registro abierto también permite cuentas Google con correo verificado; las invitaciones aún no están implementadas.
+- La cookie protege la página `/` y todos los endpoints de inventario. `/docs` sigue visible sin sesión, pero llamar esas rutas sin una cookie válida devuelve `401`; con cookie válida pero sin un rol activo permitido devuelve `403`. El envío de invitaciones exige `ADMINISTRADOR` activo. No hay limitación de intentos de login ni revocación server-side de JWT emitidos. Las cuentas nuevas, tanto por contraseña como por Google, requieren invitación.
 
 ## Persistencia y pruebas
 
 `migrations/versions/0374d9a573a1_create_categories_and_assets_tables.py` crea `categorias` y `bienes` con clave foránea; `migrations/versions/b70e8e0479aa_create_auth_users.py` crea `usuarios`; `migrations/versions/c4e9f1d2a7b3_add_google_identity.py` permite cuentas solo-Google y agrega `google_sub` único; `migrations/versions/d8b6e2f1940a_add_user_display_name.py` añade `display_name` nullable. `migrations/versions/e42c7910b6af_add_inventory_locations.py` crea `ubicaciones`, agrega `bienes.ubicacion_id` nullable, sus claves e índices y los triggers que rechazan ciclos. `migrations/versions/a6a239f7b4dc_add_inventory_movements.py` crea `movimientos` con claves foráneas a bien, usuario y ubicaciones, tipo controlado e índice para consultar el historial por bien y fecha. `migrations/versions/c15b4e3d9a20_add_audit_changes.py` crea `auditoria_cambios` con claves, restricciones e índices del modelo físico 1.1. Estas tres revisiones de inventario se aplicaron solo a `fireassets_test` local; cada integrante debe confirmar su destino real antes de migrar.
 
+`migrations/versions/f09a6e2112b4_add_auth_invitations.py` agrega `auth_invitations` con claves a `roles` y `usuarios`, hash único, expiración y marca de consumo. Se aplicó solo a `fireassets_test` local tras verificar URL efectiva y `SELECT current_database()`; cada integrante debe migrar su base de prueba por separado.
+
 Las fixtures transaccionales de autenticación e inventario comparten una `AsyncSession` con FastAPI mediante un override y revierten la transacción externa después de cada prueba, incluso si el endpoint ejecuta `commit()`. La fixture común y el cliente autenticado de inventario residen en `tests/modules/inventory/conftest.py`; las pruebas de bienes, categorías, ubicaciones y traslados la reutilizan. Véase [ADR-004](../adr/ADR-004-testing-database-isolation.md) para el aislamiento y [ADR-002](../adr/ADR-002-database-persistence.md) para PostgreSQL y sesiones asíncronas.
+
+## Registration approval (current)
+
+A public request creates only an `auth_registration_requests` row and sends a review notification to the configured admin recipient. The notification links to `/solicitudes`, where authenticated `ADMINISTRADOR` users perform POST approve/reject actions; opening the email performs no mutation. Approval creates an `auth_invitations` token for active `SUPERVISOR`, sends the hash-only token’s plaintext link to the applicant, and commits review plus invitation only after Gmail accepts the send. Password and first-time Google signup atomically consume that token. The earlier admin-issued invitation endpoint is superseded.

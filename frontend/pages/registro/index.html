@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="dark" />
+    <meta name="referrer" content="no-referrer" />
     <meta
       name="description"
       content="Pantalla de registro de Fire Control."
@@ -31,8 +32,22 @@
             <header class="form-header">
               <p class="eyebrow">Acceso al sistema</p>
               <h1 id="registration-title">Crear cuenta</h1>
-              <p>Completá tus datos para solicitar acceso a la plataforma.</p>
+              <p>Usá el enlace de invitación para crear tu cuenta.</p>
             </header>
+
+            <section id="registration-request-panel" aria-labelledby="request-title" hidden>
+              <h2 id="request-title">Solicitar acceso</h2>
+              <p>Envía tu correo para solicitar el registro. Un administrador revisará la solicitud.</p>
+              <form id="registration-request-form">
+                <div class="field-group">
+                  <label for="request-email">Correo electrónico</label>
+                  <input id="request-email" name="email" type="email" autocomplete="email" required maxlength="320" />
+                </div>
+                <button class="submit-button" type="submit">Enviar solicitud</button>
+                <p id="request-status" class="form-status" role="status" aria-live="polite" hidden></p>
+              </form>
+              <button id="google-request-button" class="google-button" type="button">Solicitar con Google</button>
+            </section>
 
             <form id="registration-form" novalidate>
               <div class="field-group">
@@ -142,5 +157,6 @@
     <script src="/js/validations/credentials.js" defer></script>
     <script src="/js/auth-form.js" defer></script>
     <script src="/js/registro.js" defer></script>
+    <script src="/js/registration-requests.js" defer></script>
   </body>
 </html>

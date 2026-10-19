@@ -85,19 +85,22 @@ async def test_role_foreign_key_is_enforced(auth_session: AsyncSession) -> None:
 
 
 @pytest.mark.asyncio
-async def test_new_registration_does_not_assign_a_role(
+async def test_invited_registration_assigns_invited_role(
     auth_session: AsyncSession,
 ) -> None:
     email = f"new-{uuid4().hex}@example.test"
+    from tests.modules.auth.conftest import create_test_invitation
+    token = await create_test_invitation(auth_session, email, "SUPERVISOR")
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
         response = await client.post(
-            "/auth/register", json={"email": email, "password": "ClaveSegura123"}
+            "/auth/register", json={"email": email, "password": "ClaveSegura123", "invitation_token": token}
         )
 
     assert response.status_code == 201
     user = await auth_session.scalar(select(User).where(User.email == email))
     assert user is not None
-    assert user.rol_id is None
+    role = await auth_session.scalar(select(Role).where(Role.nombre == "SUPERVISOR"))
+    assert role is not None and user.rol_id == role.id
     assert user.activo is True
