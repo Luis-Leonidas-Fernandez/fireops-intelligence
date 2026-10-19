@@ -5,12 +5,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config.settings import get_settings
 from app.infrastructure.database.session import get_database_session
-from app.modules.auth.models import User
+from app.modules.auth.models import Role, User
 from app.modules.auth.validations.tokens import (
     ACCESS_TOKEN_COOKIE,
     validate_access_token,
 )
 from app.shared.errors.authentication_error import AuthenticationError
+from app.shared.errors.authorization_error import AuthorizationError
 
 DatabaseSession = Annotated[AsyncSession, Depends(get_database_session)]
 
@@ -33,5 +34,16 @@ async def require_authenticated_user(
     if user is None:
         raise AuthenticationError(
             code="AUTH_REQUIRED", message="Iniciá sesión para usar el inventario."
+        )
+    role = await session.get(Role, user.rol_id) if user.rol_id is not None else None
+    if (
+        not user.activo
+        or role is None
+        or not role.activo
+        or role.nombre not in {"ADMINISTRADOR", "SUPERVISOR"}
+    ):
+        raise AuthorizationError(
+            code="INVENTORY_ACCESS_DENIED",
+            message="Tu cuenta no tiene permiso para usar el inventario.",
         )
     return user

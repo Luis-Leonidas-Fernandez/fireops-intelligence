@@ -3,13 +3,13 @@ from uuid import uuid4
 
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import delete, text, update
+from sqlalchemy import delete, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config.settings import get_settings
 from app.infrastructure.database.session import engine, get_database_session
 from app.main import app
-from app.modules.auth.models import User
+from app.modules.auth.models import Role, User
 from app.modules.auth.validations.tokens import ACCESS_TOKEN_COOKIE, create_access_token
 from app.modules.inventory.shared.models import Asset, AuditChange, Location, Movement
 
@@ -57,8 +57,14 @@ async def inventory_session() -> AsyncIterator[AsyncSession]:
 async def authenticated_inventory_client(
     inventory_session: AsyncSession,
 ) -> AsyncIterator[AsyncClient]:
+    role = await inventory_session.scalar(
+        select(Role).where(Role.nombre == "SUPERVISOR", Role.activo.is_(True))
+    )
+    assert role is not None
     user = User(
-        email=f"inventory-{uuid4().hex}@example.test", password_hash="test-only"
+        email=f"inventory-{uuid4().hex}@example.test",
+        password_hash="test-only",
+        rol_id=role.id,
     )
     inventory_session.add(user)
     await inventory_session.commit()

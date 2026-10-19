@@ -2,12 +2,12 @@ from uuid import uuid4
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import delete, text, update
+from sqlalchemy import delete, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config.settings import get_settings
-from app.modules.auth.models import User
+from app.modules.auth.models import Role, User
 from app.modules.auth.validations.tokens import ACCESS_TOKEN_COOKIE, create_access_token
 from app.modules.inventory.shared.models import Asset, Category, Location
 
@@ -35,7 +35,15 @@ async def create_asset(client: AsyncClient, category_id: int, **extra: object) -
 
 
 async def create_test_user(session: AsyncSession) -> User:
-    user = User(email=f"transfer-{uuid4().hex}@example.test", password_hash="test-only")
+    role = await session.scalar(
+        select(Role).where(Role.nombre == "SUPERVISOR", Role.activo.is_(True))
+    )
+    assert role is not None
+    user = User(
+        email=f"transfer-{uuid4().hex}@example.test",
+        password_hash="test-only",
+        rol_id=role.id,
+    )
     session.add(user)
     await session.commit()
     await session.refresh(user)

@@ -13,13 +13,13 @@ HTTP → FastAPI (`app/main.py`) → router de inventario
 
 El alta de bienes usa `register_asset/service.py` para resolver la categoría y persistir bien y categoría en una sola transacción. La edición usa `update_asset/service.py` para bloquear el bien y confirmar el cambio junto con una fila de auditoría. Los routers conservan el mapeo HTTP. Las otras rutas de inventario mantienen su organización actual, sin una capa `repository` general. La sesión se crea en `app/infrastructure/database/session.py` a partir de la URL cargada por `app/config/settings.py`.
 
-Los seis routers de inventario declaran la misma dependencia `app/modules/auth/dependencies.py::require_authenticated_user`, aplicada a sus once endpoints. El helper valida la cookie local de 30 minutos y confirma que el usuario todavía existe mediante la misma `AsyncSession` de la petición; una sesión ausente, inválida, expirada o perteneciente a un usuario eliminado devuelve `401` con `error.code = AUTH_REQUIRED`. El traslado y la edición reciben además el usuario autenticado para atribuir el cambio, sin repetir la consulta gracias al caché de dependencias de FastAPI. Esto no implementa permisos por rol.
+Los seis routers de inventario declaran la misma dependencia `app/modules/auth/dependencies.py::require_authenticated_user`, aplicada a sus once endpoints. El helper valida la cookie local de 30 minutos y confirma que el usuario todavía existe mediante la misma `AsyncSession` de la petición; una sesión ausente, inválida, expirada o perteneciente a un usuario eliminado devuelve `401` con `error.code = AUTH_REQUIRED`. Para continuar exige `usuarios.activo = true` y un rol activo cuyo nombre sea `ADMINISTRADOR` o `SUPERVISOR`. Una cuenta autenticada sin rol, inactiva o con un rol no permitido recibe `403` con `error.code = INVENTORY_ACCESS_DENIED`. Ambos roles tienen acceso completo a las rutas de inventario actuales. El traslado y la edición reciben además el usuario autorizado para atribuir el cambio, sin repetir la consulta gracias al caché de dependencias de FastAPI.
 
 La autenticación sí separa router (`app/modules/auth/router.py`), reglas de registro/login (`service.py`), schemas (`schemas.py`), modelo `User` (`models.py`) y validadores reutilizables (`validations/`). Hash Argon2 y verificación se ejecutan en threadpool. Alembic crea la tabla `usuarios`; ningún dato de PostgreSQL llega mediante `git pull`.
 
 ### Estructura implementada: rol y estado del usuario
 
-El [modelo físico](../../Phase_01/data-modeling/guie.md#3-tabla-roles) incluye el catálogo `roles` y los campos `usuarios.rol_id` y `usuarios.activo`. La revisión `e7d4c2f9a621` y el modelo `User` ya incorporan esta estructura, sin cambiar las reglas de autorización. Cada integrante debe confirmar su base de destino antes de aplicar la migración.
+El [modelo físico](../../Phase_01/data-modeling/guie.md#3-tabla-roles) incluye el catálogo `roles` y los campos `usuarios.rol_id` y `usuarios.activo`. La revisión `e7d4c2f9a621` y el modelo `User` incorporan esta estructura. Cada integrante debe confirmar su base de destino antes de aplicar la migración.
 
 | Elemento implementado | Transición compatible |
 |---|---|
@@ -28,7 +28,7 @@ El [modelo físico](../../Phase_01/data-modeling/guie.md#3-tabla-roles) incluye 
 | `usuarios.activo` | Booleano no nulo con valor predeterminado `true`, para conservar activas las cuentas existentes durante la migración. |
 | `usuarios.password_hash` | Permanece nullable: las cuentas creadas solo con Google no tienen contraseña local. |
 
-Esta fase implementa **solo el fundamento de esquema**, no permisos por rol: el guard de inventario seguirá comprobando autenticación, no `rol_id` ni `activo`, hasta implementar explícitamente la política de acceso. Las invitaciones, la administración de roles y el cierre del registro abierto son trabajo posterior; no deben inferirse de la presencia de estas columnas.
+El guard de inventario ya comprueba `rol_id` y `activo`. Los roles no se asignan automáticamente al registrarse: una cuenta nueva puede iniciar sesión, pero no operar el inventario hasta recibir una asignación controlada. Las invitaciones, la administración de roles y el cierre del registro abierto son trabajo posterior. En la base de prueba local se asignaron manualmente los dos usuarios elegidos por el responsable del proyecto; esta asignación de datos no viaja mediante Git.
 
 El requisito RNF-SEG-02 menciona además la función de carga; queda pendiente de revisión para una fase posterior. Por decisión actual del equipo, el catálogo inicial contiene solo `ADMINISTRADOR` y `SUPERVISOR`.
 
@@ -91,7 +91,7 @@ El `2` es ilustrativo: cada integrante debe usar un ID real de su propia base de
 - Los routers de inventario existentes capturan `IntegrityError`, hacen rollback y elevan `HTTPException(409)`; el handler global serializa esa excepción como `HTTP_409`. No es el mismo código de error de los servicios de autenticación.
 - `app/shared/errors/` centraliza `{"error":{"code":"...","message":"...","details":{...}}}`. Auth usa `ApplicationError`: correo repetido `EMAIL_ALREADY_REGISTERED` (`409`), credenciales incorrectas `INVALID_CREDENTIALS` (`401`). Los errores inesperados devuelven `500` con mensaje controlado.
 - Los `GET` de bienes de [Task 06](../../../labs/TASK_06_GET_ASSET_BY_ID.md) ya están implementados. Las rutas de ubicaciones permiten alta y consulta; el traslado se realiza desde la ruta del bien. No se implementaron edición ni baja de ubicaciones, ni otros tipos de movimiento.
-- La cookie protege la página `/` y todos los endpoints de inventario. `/docs` sigue visible sin sesión, pero llamar esas rutas sin una cookie válida devuelve `401`. No hay permisos por rol, limitación de intentos de login ni revocación server-side de JWT emitidos. El registro abierto también permite cuentas Google con correo verificado; las invitaciones aún no están implementadas.
+- La cookie protege la página `/` y todos los endpoints de inventario. `/docs` sigue visible sin sesión, pero llamar esas rutas sin una cookie válida devuelve `401`; con cookie válida pero sin un rol activo permitido devuelve `403`. No hay limitación de intentos de login ni revocación server-side de JWT emitidos. El registro abierto también permite cuentas Google con correo verificado; las invitaciones aún no están implementadas.
 
 ## Persistencia y pruebas
 
