@@ -17,7 +17,9 @@ from app.modules.auth.google_oauth import (
 )
 from app.modules.auth.google_observability import new_attempt_id, observe_google_auth
 from app.modules.auth.google_service import link_google_identity, sign_in_with_google
+from app.modules.auth.invitations.errors import PublicBaseURLConfigurationError
 from app.modules.auth.invitations.service import token_digest
+from app.modules.auth.invitations.workflows import submit_request
 from app.modules.auth.models import User
 from app.modules.auth.schemas import (
     AuthResponse,
@@ -234,8 +236,6 @@ async def google_callback(
         account_started = True
         observe_google_auth("account", "started", flow.attempt_id)
         if flow.source == "request":
-            from app.modules.auth.invitations.router import submit_request
-
             await submit_request(session, identity.email, "google")
             response = RedirectResponse(
                 "/registro?request_status=received", status_code=303
@@ -250,7 +250,7 @@ async def google_callback(
             user = await sign_in_with_google(session, identity, flow.invitation_hash)
             response = RedirectResponse("/", status_code=303)
             set_auth_cookie(response, user.id)
-    except ApplicationError:
+    except (ApplicationError, PublicBaseURLConfigurationError):
         observe_google_auth(
             "callback", "failed", flow.attempt_id, reason="request_unavailable"
         )
@@ -267,10 +267,3 @@ async def google_callback(
     observe_google_auth("account", "succeeded", flow.attempt_id)
     observe_google_auth("callback", "succeeded", flow.attempt_id)
     return response
-
-
-from app.modules.auth.invitations.router import (
-    router as invitations_router,
-)
-
-router.include_router(invitations_router)

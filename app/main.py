@@ -12,7 +12,8 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.config.settings import get_settings
 from app.infrastructure.database.session import get_database_session
 from app.modules.auth.dependencies import current_user_id
-from app.modules.auth.invitations.router import require_admin
+from app.modules.auth.invitations.policy import require_admin
+from app.modules.auth.invitations.router import router as invitations_router
 from app.modules.auth.models import User
 from app.modules.auth.router import router as auth_router
 from app.modules.auth.validations.tokens import (
@@ -74,6 +75,7 @@ app.include_router(register_category_router)
 app.include_router(register_location_router)
 app.include_router(transfer_asset_router)
 app.include_router(auth_router)
+app.include_router(invitations_router, prefix="/auth", tags=["Authentication"])
 app.include_router(get_asset_router)
 app.include_router(update_asset_router)
 

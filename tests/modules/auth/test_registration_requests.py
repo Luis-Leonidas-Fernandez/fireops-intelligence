@@ -1,5 +1,8 @@
 """Applicant-initiated registration review boundaries."""
 
+import ast
+from pathlib import Path
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
@@ -10,6 +13,223 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config.settings import get_settings
 from app.main import app
 from app.modules.auth.models import User
+
+
+def test_public_link_requires_explicit_safe_base_url() -> None:
+    from app.modules.auth.invitations.errors import PublicBaseURLConfigurationError
+    from app.modules.auth.invitations.links import public_link
+
+    settings = get_settings()
+    for invalid in (
+        None,
+        "",
+        "not-a-url",
+        "https://user:secret@example.test",
+        "http://example.test?",
+        "http://example.test#",
+    ):
+        with pytest.raises(PublicBaseURLConfigurationError) as failure:
+            public_link(settings.model_copy(update={"public_base_url": invalid}), "/solicitudes")
+        assert "secret" not in str(failure.value)
+
+    configured = settings.model_copy(update={"public_base_url": "http://127.0.0.1:8000"})
+    assert public_link(configured, "/solicitudes") == "http://127.0.0.1:8000/solicitudes"
+
+
+@pytest.mark.parametrize(
+    ("environment", "origin", "expected"),
+    (
+        ("production", "https://example.test", "https://example.test/solicitudes"),
+        ("development", "http://localhost:8000", "http://localhost:8000/solicitudes"),
+        ("test", "http://127.0.0.1:8000", "http://127.0.0.1:8000/solicitudes"),
+        ("testing", "http://[::1]:8000", "http://[::1]:8000/solicitudes"),
+    ),
+)
+def test_public_link_accepts_secure_or_local_test_origin(
+    environment: str, origin: str, expected: str
+) -> None:
+    from app.modules.auth.invitations.links import public_link
+
+    settings = get_settings().model_copy(
+        update={"environment": environment, "public_base_url": origin}
+    )
+    assert public_link(settings, "/solicitudes") == expected
+
+
+@pytest.mark.parametrize(
+    ("environment", "origin"),
+    (
+        ("production", "http://example.test"),
+        ("development", "http://example.test"),
+        ("production", "http://localhost:8000"),
+        ("production", "http://127.0.0.1:8000"),
+        ("production", "http://[::1]:8000"),
+        ("staging", "http://localhost:8000"),
+        ("development", "http://localhost.evil.test"),
+        ("development", "http://127.0.0.2"),
+        ("development", "http://[::1%25eth0]"),
+        ("development", "http://127.0.0.1.evil.test"),
+        ("production", "https://user:secret@example.test"),
+        ("production", "https://example.test?"),
+        ("production", "https://example.test#"),
+        ("production", "https://example.test/path"),
+        ("production", "https://example.test/"),
+        ("production", "https://example.test:invalid"),
+        ("production", "https://example.test:0"),
+        ("production", "https://example.test:65536"),
+        ("production", "https://example.test:443:444"),
+        ("production", "https://-bad.test"),
+        ("production", "https://bad..test"),
+        ("production", "https://example.test."),
+        ("production", "https://example.test\\@evil.test"),
+        ("production", "https://example.test%2Fevil.test"),
+        ("production", "https://example.test\n.evil.test"),
+        ("production", "https://example.test "),
+        ("production", "ftp://example.test"),
+    ),
+)
+def test_public_link_rejects_insecure_or_ambiguous_origin(
+    environment: str, origin: str
+) -> None:
+    from app.modules.auth.invitations.errors import PublicBaseURLConfigurationError
+    from app.modules.auth.invitations.links import public_link
+
+    settings = get_settings().model_copy(
+        update={"environment": environment, "public_base_url": origin}
+    )
+    with pytest.raises(PublicBaseURLConfigurationError) as failure:
+        public_link(settings, "/solicitudes")
+    assert "secret" not in str(failure.value)
+
+
+def test_auth_routers_do_not_import_other_routers() -> None:
+    root = Path(__file__).resolve().parents[3] / "app" / "modules" / "auth"
+    for path in (root / "router.py", root / "invitations" / "router.py"):
+        parsed = ast.parse(path.read_text())
+        assert not any(
+            isinstance(node, ast.ImportFrom)
+            and node.module is not None
+            and node.module.endswith(".router")
+            for node in ast.walk(parsed)
+        ), path
+
+
+@pytest.mark.asyncio
+async def test_public_request_commits_before_best_effort_notice(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.modules.auth.invitations import workflows
+
+    events: list[str] = []
+
+    class Session:
+        async def commit(self) -> None:
+            events.append("commit")
+
+        async def rollback(self) -> None:
+            events.append("rollback")
+
+    async def create(*_args: object) -> object:
+        events.append("create")
+        return object()
+
+    async def notice(_email: str, _link: str) -> None:
+        events.append("notice")
+
+    settings = get_settings().model_copy(
+        update={
+            "google_client_id": "client",
+            "google_client_secret": "secret",
+            "google_redirect_uri": "http://127.0.0.1:8000/auth/google/callback",
+            "gmail_sender_email": "sender@example.test",
+            "gmail_refresh_token": "refresh",
+            "registration_admin_email": "admin@example.test",
+            "public_base_url": "http://127.0.0.1:8000",
+        }
+    )
+    monkeypatch.setattr(workflows, "get_settings", lambda: settings)
+    monkeypatch.setattr(workflows, "create_registration_request", create)
+    monkeypatch.setattr(workflows, "send_registration_notice", notice)
+    await workflows.submit_request(Session(), "applicant@example.test", "password")  # type: ignore[arg-type]
+    assert events == ["create", "commit", "notice"]
+
+
+@pytest.mark.asyncio
+async def test_approval_sends_before_commit_and_rolls_back_on_delivery_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.modules.auth.invitations import workflows
+    from app.modules.auth.invitations.mail import delivery_error
+    from app.shared.errors.application_error import ApplicationError
+
+    events: list[str] = []
+
+    class Session:
+        async def commit(self) -> None:
+            events.append("commit")
+
+        async def rollback(self) -> None:
+            events.append("rollback")
+
+    async def review(*_args: object) -> tuple[object, str]:
+        events.append("review")
+        return SimpleNamespace(email="applicant@example.test"), "invite-token"
+
+    async def reject_delivery(_email: str, _link: str) -> None:
+        events.append("send")
+        raise delivery_error()
+
+    settings = get_settings().model_copy(
+        update={
+            "google_client_id": "client",
+            "google_client_secret": "secret",
+            "google_redirect_uri": "http://127.0.0.1:8000/auth/google/callback",
+            "gmail_sender_email": "sender@example.test",
+            "gmail_refresh_token": "refresh",
+            "public_base_url": "http://127.0.0.1:8000",
+        }
+    )
+    monkeypatch.setattr(workflows, "get_settings", lambda: settings)
+    monkeypatch.setattr(workflows, "review_request", review)
+    monkeypatch.setattr(workflows, "send_invitation_email", reject_delivery)
+    with pytest.raises(ApplicationError) as failure:
+        await workflows.review_registration_request(Session(), 1, 1, "approved")  # type: ignore[arg-type]
+    assert failure.value.code == "INVITATION_DELIVERY_UNAVAILABLE"
+    assert events == ["review", "send", "rollback"]
+
+
+@pytest.mark.asyncio
+async def test_approval_commit_failure_rolls_back_after_delivery(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.modules.auth.invitations import workflows
+
+    events: list[str] = []
+
+    class Session:
+        async def commit(self) -> None:
+            events.append("commit")
+            raise RuntimeError("controlled commit failure")
+
+        async def rollback(self) -> None:
+            events.append("rollback")
+
+    async def review(*_args: object) -> tuple[object, str]:
+        events.append("review")
+        return SimpleNamespace(email="applicant@example.test"), "invite-token"
+
+    async def send(_email: str, _link: str) -> None:
+        events.append("send")
+
+    settings = get_settings().model_copy(
+        update={"environment": "test", "public_base_url": "http://127.0.0.1:8000"}
+    )
+    monkeypatch.setattr(workflows, "get_settings", lambda: settings)
+    monkeypatch.setattr(workflows, "review_request", review)
+    monkeypatch.setattr(workflows, "send_invitation_email", send)
+    with pytest.raises(RuntimeError, match="controlled commit failure"):
+        await workflows.review_registration_request(Session(), 1, 1, "approved")  # type: ignore[arg-type]
+    assert events == ["review", "send", "commit", "rollback"]
 
 
 @pytest.mark.asyncio
@@ -29,13 +249,14 @@ async def test_public_request_is_generic_and_creates_no_user(
             "gmail_sender_email": "sender@example.test",
             "gmail_refresh_token": "refresh",
             "registration_admin_email": "admin@example.test",
+            "public_base_url": "http://127.0.0.1:8000",
         }
     )
     monkeypatch.setattr(
-        "app.modules.auth.invitations.router.get_settings", lambda: settings
+        "app.modules.auth.invitations.workflows.get_settings", lambda: settings
     )
     monkeypatch.setattr(
-        "app.modules.auth.invitations.router.send_registration_notice", fake_notice
+        "app.modules.auth.invitations.workflows.send_registration_notice", fake_notice
     )
     email = f"request-{uuid4().hex}@example.test"
     async with AsyncClient(
@@ -64,6 +285,7 @@ async def test_duplicate_and_existing_account_requests_are_indistinguishable(
             "gmail_sender_email": "sender@example.test",
             "gmail_refresh_token": "refresh",
             "registration_admin_email": "admin@example.test",
+            "public_base_url": "http://127.0.0.1:8000",
         }
     )
     sent: list[str] = []
@@ -72,10 +294,10 @@ async def test_duplicate_and_existing_account_requests_are_indistinguishable(
         sent.append(link)
 
     monkeypatch.setattr(
-        "app.modules.auth.invitations.router.get_settings", lambda: settings
+        "app.modules.auth.invitations.workflows.get_settings", lambda: settings
     )
     monkeypatch.setattr(
-        "app.modules.auth.invitations.router.send_registration_notice", fake_notice
+        "app.modules.auth.invitations.workflows.send_registration_notice", fake_notice
     )
     email = f"repeat-{uuid4().hex}@example.test"
     existing = User(
@@ -124,6 +346,7 @@ async def test_admin_review_requires_login_and_issues_supervisor_link(
             "gmail_sender_email": "sender@example.test",
             "gmail_refresh_token": "refresh",
             "registration_admin_email": "admin@example.test",
+            "public_base_url": "http://127.0.0.1:8000",
         }
     )
     sent: list[tuple[str, str]] = []
@@ -132,10 +355,13 @@ async def test_admin_review_requires_login_and_issues_supervisor_link(
         sent.append((email, link))
 
     monkeypatch.setattr(
+        "app.modules.auth.invitations.workflows.get_settings", lambda: settings
+    )
+    monkeypatch.setattr(
         "app.modules.auth.invitations.router.get_settings", lambda: settings
     )
     monkeypatch.setattr(
-        "app.modules.auth.invitations.router.send_invitation_email", fake_invitation
+        "app.modules.auth.invitations.workflows.send_invitation_email", fake_invitation
     )
     admin_role = await auth_session.scalar(
         select(Role).where(Role.nombre == "ADMINISTRADOR")
@@ -299,6 +525,7 @@ async def test_failed_approval_delivery_leaves_request_pending(
             "gmail_sender_email": "sender@example.test",
             "gmail_refresh_token": "refresh",
             "registration_admin_email": "admin@example.test",
+            "public_base_url": "http://127.0.0.1:8000",
         }
     )
 
@@ -306,10 +533,13 @@ async def test_failed_approval_delivery_leaves_request_pending(
         raise delivery_error()
 
     monkeypatch.setattr(
+        "app.modules.auth.invitations.workflows.get_settings", lambda: settings
+    )
+    monkeypatch.setattr(
         "app.modules.auth.invitations.router.get_settings", lambda: settings
     )
     monkeypatch.setattr(
-        "app.modules.auth.invitations.router.send_invitation_email", fail_send
+        "app.modules.auth.invitations.workflows.send_invitation_email", fail_send
     )
     role = await auth_session.scalar(select(Role).where(Role.nombre == "ADMINISTRADOR"))
     assert role
@@ -347,6 +577,85 @@ async def test_failed_approval_delivery_leaves_request_pending(
     )
 
 
+@pytest.mark.parametrize(
+    ("environment", "origin"),
+    (
+        ("development", None),
+        ("production", "http://example.test"),
+        ("production", "http://localhost:8000"),
+    ),
+)
+@pytest.mark.asyncio
+async def test_approval_without_public_origin_returns_controlled_error(
+    auth_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+    environment: str,
+    origin: str | None,
+) -> None:
+    from datetime import UTC, datetime
+
+    from app.modules.auth.models import RegistrationRequest, Role
+    from app.modules.auth.validations.tokens import (
+        ACCESS_TOKEN_COOKIE,
+        create_access_token,
+    )
+
+    settings = get_settings().model_copy(
+        update={
+            "google_client_id": "client",
+            "google_client_secret": "secret-local-test",
+            "google_redirect_uri": "http://127.0.0.1:8000/auth/google/callback",
+            "gmail_sender_email": "sender@example.test",
+            "gmail_refresh_token": "refresh-local-test",
+            "environment": environment,
+            "public_base_url": origin,
+        }
+    )
+    monkeypatch.setattr(
+        "app.modules.auth.invitations.router.get_settings", lambda: settings
+    )
+    monkeypatch.setattr(
+        "app.modules.auth.invitations.workflows.get_settings", lambda: settings
+    )
+
+    async def unexpected_send(_email: str, _link: str) -> None:
+        pytest.fail("Missing public origin must prevent delivery")
+
+    monkeypatch.setattr(
+        "app.modules.auth.invitations.workflows.send_invitation_email",
+        unexpected_send,
+    )
+    role = await auth_session.scalar(select(Role).where(Role.nombre == "ADMINISTRADOR"))
+    assert role
+    actor = User(email=f"admin-{uuid4().hex}@example.test", rol_id=role.id)
+    pending = RegistrationRequest(
+        email=f"pending-{uuid4().hex}@example.test",
+        source="password",
+        status="pending",
+        requested_at=datetime.now(UTC),
+    )
+    auth_session.add_all((actor, pending))
+    await auth_session.flush()
+    actor_id, request_id = actor.id, pending.id
+    await auth_session.commit()
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        client.cookies.set(
+            ACCESS_TOKEN_COOKIE,
+            create_access_token(actor_id, get_settings().secret_key),
+        )
+        response = await client.post(
+            f"/auth/registration-requests/{request_id}/review",
+            json={"decision": "approved"},
+        )
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "PUBLIC_BASE_URL_UNAVAILABLE"
+    assert "secret-local-test" not in str(response.json())
+    await auth_session.refresh(pending)
+    assert pending.status == "pending"
+
+
 @pytest.mark.asyncio
 async def test_expired_approval_can_request_review_again_but_active_link_cannot(
     auth_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
@@ -363,6 +672,7 @@ async def test_expired_approval_can_request_review_again_but_active_link_cannot(
             "gmail_sender_email": "sender@example.test",
             "gmail_refresh_token": "refresh",
             "registration_admin_email": "admin@example.test",
+            "public_base_url": "http://127.0.0.1:8000",
         }
     )
     sent: list[str] = []
@@ -371,10 +681,10 @@ async def test_expired_approval_can_request_review_again_but_active_link_cannot(
         sent.append(link)
 
     monkeypatch.setattr(
-        "app.modules.auth.invitations.router.get_settings", lambda: settings
+        "app.modules.auth.invitations.workflows.get_settings", lambda: settings
     )
     monkeypatch.setattr(
-        "app.modules.auth.invitations.router.send_registration_notice", fake_notice
+        "app.modules.auth.invitations.workflows.send_registration_notice", fake_notice
     )
     admin_role = await auth_session.scalar(
         select(Role).where(Role.nombre == "ADMINISTRADOR")
@@ -454,6 +764,7 @@ async def test_notice_failure_keeps_pending_and_never_reveals_account_existence(
             "gmail_sender_email": "sender@example.test",
             "gmail_refresh_token": "refresh",
             "registration_admin_email": "admin@example.test",
+            "public_base_url": "http://127.0.0.1:8000",
         }
     )
 
@@ -461,10 +772,10 @@ async def test_notice_failure_keeps_pending_and_never_reveals_account_existence(
         raise delivery_error()
 
     monkeypatch.setattr(
-        "app.modules.auth.invitations.router.get_settings", lambda: settings
+        "app.modules.auth.invitations.workflows.get_settings", lambda: settings
     )
     monkeypatch.setattr(
-        "app.modules.auth.invitations.router.send_registration_notice", fail_notice
+        "app.modules.auth.invitations.workflows.send_registration_notice", fail_notice
     )
     existing_email = f"existing-{uuid4().hex}@example.test"
     new_email = f"new-{uuid4().hex}@example.test"
@@ -503,6 +814,7 @@ async def test_pending_notice_retry_is_bounded_by_cooldown(
             "gmail_sender_email": "sender@example.test",
             "gmail_refresh_token": "refresh",
             "registration_admin_email": "admin@example.test",
+            "public_base_url": "http://127.0.0.1:8000",
         }
     )
     sent: list[str] = []
@@ -511,10 +823,10 @@ async def test_pending_notice_retry_is_bounded_by_cooldown(
         sent.append(link)
 
     monkeypatch.setattr(
-        "app.modules.auth.invitations.router.get_settings", lambda: settings
+        "app.modules.auth.invitations.workflows.get_settings", lambda: settings
     )
     monkeypatch.setattr(
-        "app.modules.auth.invitations.router.send_registration_notice", fake_notice
+        "app.modules.auth.invitations.workflows.send_registration_notice", fake_notice
     )
     target = f"retry-{uuid4().hex}@example.test"
     row = RegistrationRequest(

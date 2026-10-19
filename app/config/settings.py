@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     gmail_sender_email: str | None = None
     gmail_refresh_token: str | None = Field(default=None, repr=False)
     registration_admin_email: str | None = None
+    public_base_url: str | None = None
 
     @property
     def gmail_invitation_enabled(self) -> bool:

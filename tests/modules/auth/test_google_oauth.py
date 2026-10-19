@@ -821,6 +821,7 @@ async def test_google_request_requires_verified_callback_before_pending_row(
             "gmail_sender_email": "sender@example.test",
             "gmail_refresh_token": "refresh",
             "registration_admin_email": "admin@example.test",
+            "public_base_url": "http://127.0.0.1:8000",
         }
     )
     sent: list[str] = []
@@ -829,10 +830,10 @@ async def test_google_request_requires_verified_callback_before_pending_row(
         sent.append(link)
 
     monkeypatch.setattr(
-        "app.modules.auth.invitations.router.get_settings", lambda: settings
+        "app.modules.auth.invitations.workflows.get_settings", lambda: settings
     )
     monkeypatch.setattr(
-        "app.modules.auth.invitations.router.send_registration_notice", fake_notice
+        "app.modules.auth.invitations.workflows.send_registration_notice", fake_notice
     )
     target = str(google_provider["email"])
     async with AsyncClient(

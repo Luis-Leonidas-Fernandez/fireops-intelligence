@@ -49,3 +49,17 @@ async def create_registration_request(
     session.add(item)
     await session.flush()
     return item
+
+
+async def list_pending_requests(session: AsyncSession) -> list[RegistrationRequest]:
+    """Return the bounded review queue in request order."""
+    return list(
+        (
+            await session.scalars(
+                select(RegistrationRequest)
+                .where(RegistrationRequest.status == "pending")
+                .order_by(RegistrationRequest.requested_at.asc())
+                .limit(100)
+            )
+        ).all()
+    )

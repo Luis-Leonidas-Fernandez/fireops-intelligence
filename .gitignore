@@ -83,3 +83,4 @@ settings.local.*
 !.gitkeep
 # Local Word teaching artifact (already tracked copies require git rm --cached)
 labs/completed/TASK_04_ENDPOINTS_CATEGORIAS.docx
+docs/getting-started/guia-clonado-limpio-windows.docx

@@ -117,7 +117,7 @@ async def test_unconfigured_gmail_keeps_generic_pending_request(
     auth_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(
-        "app.modules.auth.invitations.router.get_settings",
+        "app.modules.auth.invitations.workflows.get_settings",
         lambda: get_settings().model_copy(update={"gmail_refresh_token": None}),
     )
     target = address()

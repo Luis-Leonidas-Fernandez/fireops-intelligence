@@ -5,9 +5,10 @@ Applicants request access at `/registro`. An administrator receives a review not
 ## Local setup
 
 1. Set the Gmail sender variables (`GMAIL_SENDER_EMAIL`, `GMAIL_REFRESH_TOKEN`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `GOOGLE_REDIRECT_URI`) in your private environment file. The sender refresh token requires separately authorized `gmail.send`; Google identity OAuth remains unchanged.
-2. Set `REGISTRATION_ADMIN_EMAIL` to the administrator notification mailbox in your private `.env.test` for local testing. Do not put the actual address or credentials in `.env.example` or source control.
-3. Before a local migration, verify the effective settings URL database and `SELECT current_database()` are both `fireassets_test`. Then run `ENV_FILE=.env.test .venv/bin/alembic upgrade head`. Never apply the local test instructions to `fireassets`.
-4. Sign in with an active `ADMINISTRADOR` account before opening `/solicitudes`. The review page lists up to 100 pending requests and provides explicit approve/reject buttons.
+2. Set `PUBLIC_BASE_URL=http://127.0.0.1:8000` for the local application (or your deployed public origin). This must be an `http` or `https` origin only, without a path, query, fragment, or credentials. It is not a secret. Review links are no longer inferred from the Google callback URI. If this value is missing or invalid, approval returns a controlled configuration error before attempting delivery; a public request still returns its generic `202` after saving its pending row, but its best-effort notification cannot be sent.
+3. Set `REGISTRATION_ADMIN_EMAIL` to the administrator notification mailbox in your private `.env.test` for local testing. Do not put the actual address or credentials in `.env.example` or source control.
+4. Before a local migration, verify the effective settings URL database and `SELECT current_database()` are both `fireassets_test`. Then run `ENV_FILE=.env.test .venv/bin/alembic upgrade head`. Never apply the local test instructions to `fireassets`.
+5. Sign in with an active `ADMINISTRADOR` account before opening `/solicitudes`. The review page lists up to 100 pending requests and provides explicit approve/reject buttons.
 
 ## Behavior and boundaries
 
@@ -20,3 +21,5 @@ Applicants request access at `/registro`. An administrator receives a review not
 | Signup | Password or first-time Google signup consumes the token atomically. Existing accounts continue to sign in normally. |
 
 The earlier `f09a6e2112b4` invitation migration is retained because it has been applied locally. `a4d9c2b7e631` adds request tracking as a forward revision. Automated tests mock Gmail; they do not prove live delivery. A real send requires separate sender authorization and an explicitly authorized manual test.
+
+**Known transactional risk:** approval sends the applicant email before committing the invitation/request transaction. If Gmail succeeds but the database commit later fails, the delivered link may not resolve. This refactor preserves that ordering and rollback-on-delivery-failure behavior; it does not add an outbox or change the schema.
