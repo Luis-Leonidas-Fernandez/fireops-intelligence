@@ -17,7 +17,7 @@ Require an active authenticated user with an active `ADMINISTRADOR` or `SUPERVIS
 - [x] T1: Added tests for both allowed roles on all eleven inventory endpoints, plus missing/inactive/unapproved roles and inactive accounts. Before implementation, the new negative cases produced 33 failures while the two positive cases passed.
 - [x] T2: Centralized the `403` guard in the existing auth dependency and updated inventory test users to receive an explicit supervisor role. Inventory suite: `151 passed`.
 - [x] T3: Verified the configured and actual database were both `fireassets_test`; in one transaction assigned the two exact active accounts to their requested active roles. Read-only post-check confirmed both assignments.
-- [x] T4: Updated backend architecture documentation. Full pytest suite: `203 passed`; Ruff check passed; isolated mypy (`--follow-imports=skip`) passed; `git diff --check` passed. Broad mypy reports three existing `app/main.py` exception-handler signature errors outside this edit surface. Work-unit commit: pending.
+- [x] T4: Updated backend architecture documentation. Full pytest suite: `203 passed`; Ruff check and format check passed; isolated mypy (`--follow-imports=skip`) passed; `git diff --check` passed. Broad mypy reports three existing `app/main.py` exception-handler signature errors outside this edit surface. Work-unit commit: `18cdb2a` (`feat(auth): restrict inventory to active supervisor roles`).
 
 ## Checks
 
@@ -29,4 +29,4 @@ Require an active authenticated user with an active `ADMINISTRADOR` or `SUPERVIS
 
 ## Next step
 
-Record the work-unit commit and leave push/merge to the project owner. Rollback boundary: revert the guard, error class, fixture/test and documentation changes in this work unit; the two local database assignments must be changed separately in `fireassets_test` if a rollback is requested.
+Leave push/merge to the project owner. Rollback boundary: revert the guard, error class, fixture/test and documentation changes in this work unit; the two local database assignments must be changed separately in `fireassets_test` if a rollback is requested.
