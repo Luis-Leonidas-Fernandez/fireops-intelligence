@@ -2,7 +2,7 @@
 
 ## Objective and scope
 
-Require an active authenticated user with an active `ADMINISTRADOR` or `SUPERVISOR` role for all existing inventory endpoints. Assign the two explicitly selected accounts in local `fireassets_test`: `test1@gmail.com` as `ADMINISTRADOR` and `reviewer@example.com` as `SUPERVISOR`. Do not change registration, login, invitations, or other databases.
+Require an active authenticated user with an active `ADMINISTRADOR` or `SUPERVISOR` role for all existing inventory endpoints. Assign the two explicitly selected local test accounts in `fireassets_test` their approved inventory roles. Do not change registration, login, invitations, or other databases.
 
 ## Constraints and approach
 

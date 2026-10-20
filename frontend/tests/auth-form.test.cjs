@@ -143,6 +143,20 @@ test('Google button starts server-side OAuth without granting a local session', 
   assert.equal(ui.googleButton.attributes['aria-busy'], 'true');
 });
 
+test('Google sign-in opts into only the exact solicitudes return target', () => {
+  const ui = harness('login', '?next=%2Fsolicitudes');
+  ui.googleButton.listeners.click();
+  assert.equal(ui.location.path, '/auth/google/start?flow=signin&source=login&next=%2Fsolicitudes');
+});
+
+test('Google sign-in ignores external or malformed return targets', () => {
+  for (const next of ['https://attacker.example', '//attacker.example', '/solicitudes?other=/']) {
+    const ui = harness('login', `?next=${encodeURIComponent(next)}`);
+    ui.googleButton.listeners.click();
+    assert.equal(ui.location.path, '/auth/google/start?flow=signin&source=login');
+  }
+});
+
 test('registration Google button posts invitation without putting it in the URL', () => {
   const ui = harness('register', '', '#invite=test-invitation-token');
   ui.googleButton.listeners.click();

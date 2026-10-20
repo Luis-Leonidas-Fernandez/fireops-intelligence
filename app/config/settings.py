@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     gmail_sender_email: str | None = None
     gmail_refresh_token: str | None = Field(default=None, repr=False)
     registration_admin_email: str | None = None
+    registration_reviewer_google_sub: str | None = Field(default=None, repr=False)
     public_base_url: str | None = None
 
     @property

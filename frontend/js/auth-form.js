@@ -134,7 +134,9 @@
         document.body.append(redirect);
         redirect.submit();
       } else {
-        window.location.assign("/auth/google/start?flow=signin&source=login");
+        const next = new URLSearchParams(window.location.search || "").get("next");
+        const returnTarget = next === "/solicitudes" ? "&next=%2Fsolicitudes" : "";
+        window.location.assign(`/auth/google/start?flow=signin&source=login${returnTarget}`);
       }
     });
     dialog.querySelector(".modal-close").addEventListener("click", () => dialog.close());

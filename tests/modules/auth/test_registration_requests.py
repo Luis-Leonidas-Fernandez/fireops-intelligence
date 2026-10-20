@@ -15,6 +15,16 @@ from app.main import app
 from app.modules.auth.models import User
 
 
+@pytest.fixture(autouse=True)
+def configured_reviewer(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.modules.auth.invitations import policy
+
+    settings = get_settings().model_copy(
+        update={"registration_reviewer_google_sub": "reviewer-sub-for-tests"}
+    )
+    monkeypatch.setattr(policy, "get_settings", lambda: settings)
+
+
 def test_public_link_requires_explicit_safe_base_url() -> None:
     from app.modules.auth.invitations.errors import PublicBaseURLConfigurationError
     from app.modules.auth.invitations.links import public_link
@@ -29,11 +39,17 @@ def test_public_link_requires_explicit_safe_base_url() -> None:
         "http://example.test#",
     ):
         with pytest.raises(PublicBaseURLConfigurationError) as failure:
-            public_link(settings.model_copy(update={"public_base_url": invalid}), "/solicitudes")
+            public_link(
+                settings.model_copy(update={"public_base_url": invalid}), "/solicitudes"
+            )
         assert "secret" not in str(failure.value)
 
-    configured = settings.model_copy(update={"public_base_url": "http://127.0.0.1:8000"})
-    assert public_link(configured, "/solicitudes") == "http://127.0.0.1:8000/solicitudes"
+    configured = settings.model_copy(
+        update={"public_base_url": "http://127.0.0.1:8000"}
+    )
+    assert (
+        public_link(configured, "/solicitudes") == "http://127.0.0.1:8000/solicitudes"
+    )
 
 
 @pytest.mark.parametrize(
@@ -143,7 +159,7 @@ async def test_public_request_commits_before_best_effort_notice(
             "google_redirect_uri": "http://127.0.0.1:8000/auth/google/callback",
             "gmail_sender_email": "sender@example.test",
             "gmail_refresh_token": "refresh",
-            "registration_admin_email": "admin@example.test",
+            "registration_admin_email": "reviewer@example.test",
             "public_base_url": "http://127.0.0.1:8000",
         }
     )
@@ -152,6 +168,92 @@ async def test_public_request_commits_before_best_effort_notice(
     monkeypatch.setattr(workflows, "send_registration_notice", notice)
     await workflows.submit_request(Session(), "applicant@example.test", "password")  # type: ignore[arg-type]
     assert events == ["create", "commit", "notice"]
+
+
+@pytest.mark.asyncio
+async def test_missing_notice_recipient_keeps_request_and_logs_operational_error(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    from app.modules.auth.invitations import workflows
+
+    events: list[str] = []
+
+    class Session:
+        async def commit(self) -> None:
+            events.append("commit")
+
+        async def rollback(self) -> None:
+            events.append("rollback")
+
+    async def create(*_args: object) -> object:
+        events.append("create")
+        return object()
+
+    async def unexpected_notice(_email: str, _link: str) -> None:
+        pytest.fail("Invalid recipient must never receive a notice")
+
+    settings = get_settings().model_copy(
+        update={
+            "registration_admin_email": None,
+            "google_client_id": "client",
+            "google_client_secret": "secret",
+            "google_redirect_uri": "http://127.0.0.1:8000/auth/google/callback",
+            "gmail_sender_email": "sender@example.test",
+            "gmail_refresh_token": "refresh",
+            "public_base_url": "http://127.0.0.1:8000",
+        }
+    )
+    monkeypatch.setattr(workflows, "get_settings", lambda: settings)
+    monkeypatch.setattr(workflows, "create_registration_request", create)
+    monkeypatch.setattr(workflows, "send_registration_notice", unexpected_notice)
+    with caplog.at_level("ERROR", logger="uvicorn.error"):
+        await workflows.submit_request(Session(), "applicant@example.test", "password")  # type: ignore[arg-type]
+    assert events == ["create", "commit"]
+    assert (
+        "registration_notice_unavailable: recipient_configuration_invalid"
+        in caplog.text
+    )
+    assert "other-admin@example.test" not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_notice_uses_configured_recipient_independent_of_reviewer_identity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.modules.auth.invitations import workflows
+
+    sent: list[str] = []
+
+    class Session:
+        async def commit(self) -> None:
+            return None
+
+        async def rollback(self) -> None:
+            return None
+
+    async def create(*_args: object) -> object:
+        return object()
+
+    async def notice(email: str, _link: str) -> None:
+        sent.append(email)
+
+    settings = get_settings().model_copy(
+        update={
+            "registration_admin_email": "ops-notifications@example.test",
+            "google_client_id": "client",
+            "google_client_secret": "secret",
+            "google_redirect_uri": "http://127.0.0.1:8000/auth/google/callback",
+            "gmail_sender_email": "sender@example.test",
+            "gmail_refresh_token": "refresh",
+            "public_base_url": "http://127.0.0.1:8000",
+        }
+    )
+    monkeypatch.setattr(workflows, "get_settings", lambda: settings)
+    monkeypatch.setattr(workflows, "create_registration_request", create)
+    monkeypatch.setattr(workflows, "send_registration_notice", notice)
+    await workflows.submit_request(Session(), "applicant@example.test", "password")  # type: ignore[arg-type]
+    assert sent == ["ops-notifications@example.test"]
 
 
 @pytest.mark.asyncio
@@ -248,7 +350,7 @@ async def test_public_request_is_generic_and_creates_no_user(
             "google_redirect_uri": "http://127.0.0.1:8000/auth/google/callback",
             "gmail_sender_email": "sender@example.test",
             "gmail_refresh_token": "refresh",
-            "registration_admin_email": "admin@example.test",
+            "registration_admin_email": "reviewer@example.test",
             "public_base_url": "http://127.0.0.1:8000",
         }
     )
@@ -268,7 +370,7 @@ async def test_public_request_is_generic_and_creates_no_user(
         "message": "Si corresponde, recibirás novedades por correo."
     }
     assert await auth_session.scalar(select(User.id).where(User.email == email)) is None
-    assert sent == [("admin@example.test", "http://127.0.0.1:8000/solicitudes")]
+    assert sent == [("reviewer@example.test", "http://127.0.0.1:8000/solicitudes")]
 
 
 @pytest.mark.asyncio
@@ -284,7 +386,7 @@ async def test_duplicate_and_existing_account_requests_are_indistinguishable(
             "google_redirect_uri": "http://127.0.0.1:8000/auth/google/callback",
             "gmail_sender_email": "sender@example.test",
             "gmail_refresh_token": "refresh",
-            "registration_admin_email": "admin@example.test",
+            "registration_admin_email": "reviewer@example.test",
             "public_base_url": "http://127.0.0.1:8000",
         }
     )
@@ -345,7 +447,7 @@ async def test_admin_review_requires_login_and_issues_supervisor_link(
             "google_redirect_uri": "http://127.0.0.1:8000/auth/google/callback",
             "gmail_sender_email": "sender@example.test",
             "gmail_refresh_token": "refresh",
-            "registration_admin_email": "admin@example.test",
+            "registration_admin_email": "reviewer@example.test",
             "public_base_url": "http://127.0.0.1:8000",
         }
     )
@@ -370,7 +472,11 @@ async def test_admin_review_requires_login_and_issues_supervisor_link(
         select(Role).where(Role.nombre == "SUPERVISOR")
     )
     assert admin_role and supervisor_role
-    admin = User(email=f"admin-{uuid4().hex}@example.test", rol_id=admin_role.id)
+    admin = User(
+        email="REVIEWER@EXAMPLE.TEST",
+        google_sub="reviewer-sub-for-tests",
+        rol_id=admin_role.id,
+    )
     supervisor = User(
         email=f"super-{uuid4().hex}@example.test", rol_id=supervisor_role.id
     )
@@ -437,7 +543,11 @@ async def test_rejection_never_issues_signup_token(auth_session: AsyncSession) -
         select(Role).where(Role.nombre == "ADMINISTRADOR")
     )
     assert admin_role
-    admin = User(email=f"admin-{uuid4().hex}@example.test", rol_id=admin_role.id)
+    admin = User(
+        email="REVIEWER@EXAMPLE.TEST",
+        google_sub="reviewer-sub-for-tests",
+        rol_id=admin_role.id,
+    )
     target = f"rejected-{uuid4().hex}@example.test"
     item = RegistrationRequest(
         email=target,
@@ -499,9 +609,218 @@ async def test_review_page_redirects_anonymous_and_rejects_non_admin(
         forbidden = await client.get("/solicitudes")
     assert (
         anonymous.status_code == 303
-        and anonymous.headers["location"] == "/iniciar-sesion"
+        and anonymous.headers["location"] == "/iniciar-sesion?next=%2Fsolicitudes"
     )
     assert forbidden.status_code == 403
+
+
+@pytest.mark.parametrize("role_name", ("ADMINISTRADOR", "SUPERVISOR"))
+@pytest.mark.parametrize("decision", ("approved", "rejected"))
+@pytest.mark.asyncio
+async def test_designated_reviewer_can_decide_with_either_operational_role(
+    auth_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+    role_name: str,
+    decision: str,
+) -> None:
+    from datetime import UTC, datetime
+
+    from app.modules.auth.models import RegistrationRequest, Role
+    from app.modules.auth.validations.tokens import (
+        ACCESS_TOKEN_COOKIE,
+        create_access_token,
+    )
+
+    role = await auth_session.scalar(select(Role).where(Role.nombre == role_name))
+    assert role is not None
+    reviewer = User(
+        email="REVIEWER@EXAMPLE.TEST",
+        google_sub="reviewer-sub-for-tests",
+        rol_id=role.id,
+    )
+    item = RegistrationRequest(
+        email=f"applicant-{uuid4().hex}@example.test",
+        source="password",
+        status="pending",
+        requested_at=datetime.now(UTC),
+    )
+    auth_session.add_all((reviewer, item))
+    await auth_session.flush()
+    reviewer_id, item_id = reviewer.id, item.id
+    await auth_session.commit()
+
+    async def fake_invitation(_email: str, _link: str) -> None:
+        return None
+
+    settings = get_settings().model_copy(
+        update={
+            "google_client_id": "client",
+            "google_client_secret": "secret",
+            "google_redirect_uri": "http://127.0.0.1:8000/auth/google/callback",
+            "gmail_sender_email": "sender@example.test",
+            "gmail_refresh_token": "refresh",
+            "registration_admin_email": "ops-notifications@example.test",
+            "registration_reviewer_google_sub": "reviewer-sub-for-tests",
+            "public_base_url": "http://127.0.0.1:8000",
+        }
+    )
+    from app.modules.auth.invitations import policy
+
+    monkeypatch.setattr(policy, "get_settings", lambda: settings)
+    monkeypatch.setattr(
+        "app.modules.auth.invitations.router.get_settings", lambda: settings
+    )
+    monkeypatch.setattr(
+        "app.modules.auth.invitations.workflows.get_settings", lambda: settings
+    )
+    monkeypatch.setattr(
+        "app.modules.auth.invitations.workflows.send_invitation_email", fake_invitation
+    )
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        client.cookies.set(
+            ACCESS_TOKEN_COOKIE,
+            create_access_token(reviewer_id, get_settings().secret_key),
+        )
+        listed = await client.get("/auth/registration-requests")
+        page = await client.get("/solicitudes")
+        result = await client.post(
+            f"/auth/registration-requests/{item_id}/review", json={"decision": decision}
+        )
+    assert listed.status_code == 200
+    assert page.status_code == 200
+    assert result.status_code == 200
+    await auth_session.refresh(item)
+    assert item.status == decision
+
+
+@pytest.mark.parametrize(
+    ("role_name", "email", "subject", "active", "configured_sub"),
+    (
+        (
+            "ADMINISTRADOR",
+            "other-admin@example.test",
+            "other-admin-sub-for-tests",
+            True,
+            "reviewer-sub-for-tests",
+        ),
+        (
+            "SUPERVISOR",
+            "other-supervisor@example.test",
+            "other-supervisor-sub-for-tests",
+            True,
+            "reviewer-sub-for-tests",
+        ),
+        (
+            "ADMINISTRADOR",
+            "notification@example.test",
+            "different-sub",
+            True,
+            "reviewer-sub-for-tests",
+        ),
+        (
+            "ADMINISTRADOR",
+            "reviewer@example.test",
+            None,
+            True,
+            "reviewer-sub-for-tests",
+        ),
+        (
+            "ADMINISTRADOR",
+            "REVIEWER@EXAMPLE.TEST",
+            "reviewer-sub-for-tests",
+            False,
+            "reviewer-sub-for-tests",
+        ),
+        (
+            None,
+            "REVIEWER@EXAMPLE.TEST",
+            "reviewer-sub-for-tests",
+            True,
+            "reviewer-sub-for-tests",
+        ),
+        (
+            "ADMINISTRADOR",
+            "REVIEWER@EXAMPLE.TEST",
+            "reviewer-sub-for-tests",
+            True,
+            None,
+        ),
+        (
+            "ADMINISTRADOR",
+            "REVIEWER@EXAMPLE.TEST",
+            "reviewer-sub-for-tests",
+            True,
+            "incorrect-config",
+        ),
+    ),
+)
+@pytest.mark.asyncio
+async def test_review_requires_designated_active_google_identity_and_role(
+    auth_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+    role_name: str | None,
+    email: str,
+    subject: str | None,
+    active: bool,
+    configured_sub: str | None,
+) -> None:
+    from datetime import UTC, datetime
+
+    from app.modules.auth.invitations import policy
+    from app.modules.auth.models import RegistrationRequest, Role
+    from app.modules.auth.validations.tokens import (
+        ACCESS_TOKEN_COOKIE,
+        create_access_token,
+    )
+
+    role = (
+        await auth_session.scalar(select(Role).where(Role.nombre == role_name))
+        if role_name
+        else None
+    )
+    actor = User(
+        email=email,
+        google_sub=subject,
+        rol_id=role.id if role else None,
+        activo=active,
+    )
+    item = RegistrationRequest(
+        email=f"applicant-{uuid4().hex}@example.test",
+        source="password",
+        status="pending",
+        requested_at=datetime.now(UTC),
+    )
+    auth_session.add_all((actor, item))
+    await auth_session.flush()
+    actor_id, item_id = actor.id, item.id
+    await auth_session.commit()
+    settings = get_settings().model_copy(
+        update={
+            "registration_reviewer_google_sub": configured_sub,
+            "registration_admin_email": "notification@example.test",
+        }
+    )
+    monkeypatch.setattr(policy, "get_settings", lambda: settings)
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        client.cookies.set(
+            ACCESS_TOKEN_COOKIE,
+            create_access_token(actor_id, get_settings().secret_key),
+        )
+        listed = await client.get("/auth/registration-requests")
+        page = await client.get("/solicitudes")
+        rejected = await client.post(
+            f"/auth/registration-requests/{item_id}/review",
+            json={"decision": "rejected"},
+        )
+    assert listed.status_code == 403
+    assert page.status_code == 403
+    assert rejected.status_code == 403
+    await auth_session.refresh(item)
+    assert item.status == "pending"
 
 
 @pytest.mark.asyncio
@@ -524,7 +843,7 @@ async def test_failed_approval_delivery_leaves_request_pending(
             "google_redirect_uri": "http://127.0.0.1:8000/auth/google/callback",
             "gmail_sender_email": "sender@example.test",
             "gmail_refresh_token": "refresh",
-            "registration_admin_email": "admin@example.test",
+            "registration_admin_email": "reviewer@example.test",
             "public_base_url": "http://127.0.0.1:8000",
         }
     )
@@ -543,7 +862,11 @@ async def test_failed_approval_delivery_leaves_request_pending(
     )
     role = await auth_session.scalar(select(Role).where(Role.nombre == "ADMINISTRADOR"))
     assert role
-    admin = User(email=f"admin-{uuid4().hex}@example.test", rol_id=role.id)
+    admin = User(
+        email="REVIEWER@EXAMPLE.TEST",
+        google_sub="reviewer-sub-for-tests",
+        rol_id=role.id,
+    )
     target = f"failure-{uuid4().hex}@example.test"
     item = RegistrationRequest(
         email=target,
@@ -627,7 +950,11 @@ async def test_approval_without_public_origin_returns_controlled_error(
     )
     role = await auth_session.scalar(select(Role).where(Role.nombre == "ADMINISTRADOR"))
     assert role
-    actor = User(email=f"admin-{uuid4().hex}@example.test", rol_id=role.id)
+    actor = User(
+        email="REVIEWER@EXAMPLE.TEST",
+        google_sub="reviewer-sub-for-tests",
+        rol_id=role.id,
+    )
     pending = RegistrationRequest(
         email=f"pending-{uuid4().hex}@example.test",
         source="password",
@@ -671,7 +998,7 @@ async def test_expired_approval_can_request_review_again_but_active_link_cannot(
             "google_redirect_uri": "http://127.0.0.1:8000/auth/google/callback",
             "gmail_sender_email": "sender@example.test",
             "gmail_refresh_token": "refresh",
-            "registration_admin_email": "admin@example.test",
+            "registration_admin_email": "reviewer@example.test",
             "public_base_url": "http://127.0.0.1:8000",
         }
     )
@@ -693,7 +1020,11 @@ async def test_expired_approval_can_request_review_again_but_active_link_cannot(
         select(Role).where(Role.nombre == "SUPERVISOR")
     )
     assert admin_role and supervisor_role
-    admin = User(email=f"admin-{uuid4().hex}@example.test", rol_id=admin_role.id)
+    admin = User(
+        email="REVIEWER@EXAMPLE.TEST",
+        google_sub="reviewer-sub-for-tests",
+        rol_id=admin_role.id,
+    )
     expired_email = f"expired-{uuid4().hex}@example.test"
     active_email = f"active-{uuid4().hex}@example.test"
     old = datetime.now(UTC) - timedelta(days=3)
@@ -763,7 +1094,7 @@ async def test_notice_failure_keeps_pending_and_never_reveals_account_existence(
             "google_redirect_uri": "http://127.0.0.1:8000/auth/google/callback",
             "gmail_sender_email": "sender@example.test",
             "gmail_refresh_token": "refresh",
-            "registration_admin_email": "admin@example.test",
+            "registration_admin_email": "reviewer@example.test",
             "public_base_url": "http://127.0.0.1:8000",
         }
     )
@@ -813,7 +1144,7 @@ async def test_pending_notice_retry_is_bounded_by_cooldown(
             "google_redirect_uri": "http://127.0.0.1:8000/auth/google/callback",
             "gmail_sender_email": "sender@example.test",
             "gmail_refresh_token": "refresh",
-            "registration_admin_email": "admin@example.test",
+            "registration_admin_email": "reviewer@example.test",
             "public_base_url": "http://127.0.0.1:8000",
         }
     )

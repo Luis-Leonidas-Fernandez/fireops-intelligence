@@ -35,17 +35,21 @@ async def submit_request(session: AsyncSession, email: str, source: str) -> None
         raise
 
     settings = get_settings()
-    if not settings.gmail_invitation_enabled or not settings.registration_admin_email:
-        logger.warning("registration_notice_unavailable: sender_not_configured")
+    recipient = settings.registration_admin_email
+    if not recipient:
+        logger.error("registration_notice_unavailable: recipient_configuration_invalid")
+        return
+    if not settings.gmail_invitation_enabled:
+        logger.error("registration_notice_unavailable: sender_not_configured")
         return
     try:
         await send_registration_notice(
-            settings.registration_admin_email,
+            recipient,
             public_link(settings, "/solicitudes"),
         )
     except (ApplicationError, PublicBaseURLConfigurationError):
         # Keep the public response generic and the committed request intact.
-        logger.warning("registration_notice_unavailable: delivery_failed")
+        logger.error("registration_notice_unavailable: delivery_failed")
 
 
 async def review_registration_request(

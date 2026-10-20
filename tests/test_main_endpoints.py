@@ -87,6 +87,17 @@ async def test_sign_in_page_is_separate_from_registration() -> None:
 
 
 @pytest.mark.asyncio
+async def test_unauthenticated_solicitudes_preserves_fixed_sign_in_return() -> None:
+    transport = ASGITransport(app=app)
+
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/solicitudes")
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/iniciar-sesion?next=%2Fsolicitudes"
+
+
+@pytest.mark.asyncio
 async def test_frontend_assets_and_api_routes_coexist() -> None:
     transport = ASGITransport(app=app)
 

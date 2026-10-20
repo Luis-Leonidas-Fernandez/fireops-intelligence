@@ -2,19 +2,23 @@
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config.settings import get_settings
 from app.modules.auth.models import Role, User
 from app.shared.errors.authorization_error import AuthorizationError
 
 
 async def require_admin(session: AsyncSession, actor: User) -> None:
-    role = await session.get(Role, actor.rol_id)
+    settings = get_settings()
+    role = await session.get(Role, actor.rol_id) if actor.rol_id is not None else None
     if (
         not actor.activo
+        or not settings.registration_reviewer_google_sub
+        or actor.google_sub != settings.registration_reviewer_google_sub
         or role is None
         or not role.activo
-        or role.nombre != "ADMINISTRADOR"
+        or role.nombre not in {"ADMINISTRADOR", "SUPERVISOR"}
     ):
         raise AuthorizationError(
             code="REGISTRATION_REVIEW_DENIED",
-            message="Solo un administrador puede revisar solicitudes.",
+            message="No tenés permiso para revisar solicitudes.",
         )

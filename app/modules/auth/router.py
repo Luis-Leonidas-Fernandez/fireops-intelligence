@@ -2,7 +2,7 @@ import secrets
 from typing import Annotated, Literal
 from urllib.parse import parse_qs
 
-from fastapi import APIRouter, Depends, Request, Response, status
+from fastapi import APIRouter, Depends, Query, Request, Response, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -31,6 +31,7 @@ from app.modules.auth.service import authenticate_user, register_user
 from app.modules.auth.validations.google_flow import (
     GOOGLE_FLOW_COOKIE,
     GOOGLE_FLOW_TTL,
+    GOOGLE_RETURN_TARGETS,
     decode_google_flow,
     encode_google_flow,
     new_google_flow,
@@ -106,7 +107,9 @@ async def current_profile(request: Request, session: DatabaseSession) -> UserRes
     return UserResponse.model_validate(user)
 
 
-def google_error_response(code: str, source: str = "login") -> RedirectResponse:
+def google_error_response(
+    code: str, source: str = "login", *, clear_flow_cookie: bool = True
+) -> RedirectResponse:
     page = {
         "login": "/iniciar-sesion",
         "register": "/registro",
@@ -116,7 +119,8 @@ def google_error_response(code: str, source: str = "login") -> RedirectResponse:
     if code == "GOOGLE_LOGIN_REQUIRED":
         page = "/iniciar-sesion"
     response = RedirectResponse(f"{page}?auth_error={code}", status_code=303)
-    response.delete_cookie(GOOGLE_FLOW_COOKIE, path="/auth/google", samesite="lax")
+    if clear_flow_cookie:
+        response.delete_cookie(GOOGLE_FLOW_COOKIE, path="/auth/google", samesite="lax")
     return response
 
 
@@ -126,6 +130,7 @@ async def google_start(
     session: DatabaseSession,
     flow: Literal["signin", "link"] = "signin",
     source: Literal["login", "register", "request"] = "login",
+    next_target: str | None = Query(default=None, alias="next"),
 ) -> RedirectResponse:
     settings = get_settings()
     origin = "dashboard" if flow == "link" else source
@@ -163,7 +168,14 @@ async def google_start(
         if len(token_values) != 1 or not token_values[0] or len(token_values[0]) > 256:
             return google_error_response("INVITATION_INVALID", origin)
         invitation_hash = token_digest(token_values[0])
-    google_flow = new_google_flow(flow, origin, user_id, invitation_hash)
+    return_to = (
+        next_target
+        if origin == "login" and next_target in GOOGLE_RETURN_TARGETS
+        else "/"
+    )
+    google_flow = new_google_flow(
+        flow, origin, user_id, invitation_hash, return_to=return_to
+    )
     response = RedirectResponse(
         create_authorization_url(
             settings,
@@ -213,7 +225,9 @@ async def google_callback(
         observe_google_auth(
             "callback", "rejected", flow.attempt_id, reason="invalid_state"
         )
-        return google_error_response("GOOGLE_SESSION_EXPIRED", flow.source)
+        return google_error_response(
+            "GOOGLE_SESSION_EXPIRED", clear_flow_cookie=False
+        )
     if error:
         observe_google_auth(
             "callback", "rejected", flow.attempt_id, reason="provider_denied"
@@ -248,7 +262,7 @@ async def google_callback(
             response = RedirectResponse("/?auth_status=GOOGLE_LINKED", status_code=303)
         else:
             user = await sign_in_with_google(session, identity, flow.invitation_hash)
-            response = RedirectResponse("/", status_code=303)
+            response = RedirectResponse(flow.return_to, status_code=303)
             set_auth_cookie(response, user.id)
     except (ApplicationError, PublicBaseURLConfigurationError):
         observe_google_auth(

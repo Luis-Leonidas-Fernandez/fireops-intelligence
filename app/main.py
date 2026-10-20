@@ -109,7 +109,9 @@ async def review_page(
     user_id = current_user_id(request)
     actor = await session.get(User, user_id) if user_id is not None else None
     if actor is None:
-        return RedirectResponse("/iniciar-sesion", status_code=303)
+        return RedirectResponse(
+            "/iniciar-sesion?next=%2Fsolicitudes", status_code=303
+        )
     await require_admin(session, actor)
     return FileResponse(frontend_dir / "pages" / "solicitudes" / "index.html")
 

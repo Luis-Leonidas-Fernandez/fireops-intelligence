@@ -11,6 +11,7 @@ from app.modules.auth.google_observability import new_attempt_id
 
 GOOGLE_FLOW_COOKIE = "fire_control_google_flow"
 GOOGLE_FLOW_TTL = timedelta(minutes=5)
+GOOGLE_RETURN_TARGETS = {"/", "/solicitudes"}
 
 
 @dataclass(frozen=True)
@@ -23,11 +24,18 @@ class GoogleFlow:
     flow: str
     user_id: int | None
     invitation_hash: str | None = None
+    return_to: str = "/"
 
 
 def new_google_flow(
-    flow: str, source: str, user_id: int | None, invitation_hash: str | None = None
+    flow: str,
+    source: str,
+    user_id: int | None,
+    invitation_hash: str | None = None,
+    return_to: str = "/",
 ) -> GoogleFlow:
+    if return_to not in GOOGLE_RETURN_TARGETS:
+        return_to = "/"
     return GoogleFlow(
         attempt_id=new_attempt_id(),
         state=secrets.token_urlsafe(32),
@@ -37,6 +45,7 @@ def new_google_flow(
         flow=flow,
         user_id=user_id,
         invitation_hash=invitation_hash,
+        return_to=return_to,
     )
 
 
@@ -52,6 +61,7 @@ def encode_google_flow(flow: GoogleFlow, secret_key: str) -> str:
             "flow": flow.flow,
             "user_id": flow.user_id,
             "invitation_hash": flow.invitation_hash,
+            "return_to": flow.return_to,
             "exp": datetime.now(UTC) + GOOGLE_FLOW_TTL,
         },
         secret_key,
@@ -74,6 +84,7 @@ def decode_google_flow(token: str, secret_key: str) -> GoogleFlow:
                     "verifier",
                     "source",
                     "flow",
+                    "return_to",
                     "exp",
                 ]
             },
@@ -84,6 +95,8 @@ def decode_google_flow(token: str, secret_key: str) -> GoogleFlow:
             raise ValueError("Wrong flow")
         if claims["source"] not in {"login", "register", "dashboard", "request"}:
             raise ValueError("Wrong source")
+        if claims["return_to"] not in GOOGLE_RETURN_TARGETS:
+            raise ValueError("Wrong return target")
         if (claims["flow"] == "link") != (claims["source"] == "dashboard"):
             raise ValueError("Flow/source mismatch")
         user_id = claims.get("user_id")
@@ -115,6 +128,7 @@ def decode_google_flow(token: str, secret_key: str) -> GoogleFlow:
             flow=claims["flow"],
             user_id=user_id,
             invitation_hash=invitation_hash,
+            return_to=claims["return_to"],
         )
     except (jwt.PyJWTError, KeyError, ValueError, TypeError) as error:
         raise GoogleOAuthFailure("GOOGLE_SESSION_EXPIRED") from error

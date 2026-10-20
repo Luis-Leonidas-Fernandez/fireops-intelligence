@@ -183,14 +183,86 @@ async def test_google_observability_marks_state_rejection(
     assert state not in caplog.text
 
 
+@pytest.mark.asyncio
+async def test_google_return_target_is_fixed_allowlist_and_signed(
+    auth_session: AsyncSession,
+    google_provider: dict[str, object],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def sign_in(_session: object, _identity: object, _invitation: object) -> object:
+        from types import SimpleNamespace
+
+        return SimpleNamespace(id=1)
+
+    monkeypatch.setattr(auth_router, "sign_in_with_google", sign_in)
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        for target, expected in (
+            ("/solicitudes", "/solicitudes"),
+            ("https://attacker.example", "/"),
+            ("//attacker.example", "/"),
+            ("/solicitudes?other=/", "/"),
+        ):
+            state, google_provider["nonce"] = await start_google(
+                client, next_target=target
+            )
+            completed = await finish_google(client, state)
+            assert completed.headers["location"] == expected
+
+
+@pytest.mark.asyncio
+async def test_stale_google_callback_preserves_newer_flow_cookie(
+    auth_session: AsyncSession,
+    google_provider: dict[str, object],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def sign_in(_session: object, _identity: object, _invitation: object) -> object:
+        from types import SimpleNamespace
+
+        return SimpleNamespace(id=1)
+
+    monkeypatch.setattr(auth_router, "sign_in_with_google", sign_in)
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        stale_state, _ = await start_google(client, next_target="/solicitudes")
+        current_state, google_provider["nonce"] = await start_google(
+            client,
+            source="register",
+            invitation_token=str(google_provider["invitation_token"]),
+        )
+        current_cookie = client.cookies[GOOGLE_FLOW_COOKIE]
+
+        stale = await client.get(
+            "/auth/google/callback",
+            params={"state": stale_state, "code": "one-time-code"},
+        )
+
+        assert stale.headers["location"] == "/iniciar-sesion?auth_error=GOOGLE_SESSION_EXPIRED"
+        assert GOOGLE_FLOW_COOKIE not in stale.cookies
+        assert client.cookies[GOOGLE_FLOW_COOKIE] == current_cookie
+        google_provider["nonce"] = decode_google_flow(
+            current_cookie, get_settings().secret_key
+        ).nonce
+        current = await finish_google(client, current_state)
+
+    assert current.headers["location"] == "/"
+
+
 async def start_google(
     client: AsyncClient,
     *,
     flow: str = "signin",
     source: str = "login",
     invitation_token: str | None = None,
+    next_target: str | None = None,
 ) -> tuple[str, str]:
     path = f"/auth/google/start?flow={flow}&source={source}"
+    if next_target is not None:
+        from urllib.parse import urlencode
+
+        path += "&" + urlencode({"next": next_target})
     response = (
         await client.post(path, data={"invitation_token": invitation_token})
         if invitation_token
@@ -820,7 +892,7 @@ async def test_google_request_requires_verified_callback_before_pending_row(
             "google_redirect_uri": "http://127.0.0.1:8000/auth/google/callback",
             "gmail_sender_email": "sender@example.test",
             "gmail_refresh_token": "refresh",
-            "registration_admin_email": "admin@example.test",
+            "registration_admin_email": "reviewer@example.test",
             "public_base_url": "http://127.0.0.1:8000",
         }
     )
