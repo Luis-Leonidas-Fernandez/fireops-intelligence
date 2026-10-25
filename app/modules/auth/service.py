@@ -45,4 +45,9 @@ async def authenticate_user(session: AsyncSession, email: str, password: str) ->
             code="INVALID_CREDENTIALS",
             message="El correo o la contraseña son incorrectos.",
         )
+    if not user.activo:
+        raise AuthenticationError(
+            code="INVALID_CREDENTIALS",
+            message="El correo o la contraseña son incorrectos.",
+        )
     return user

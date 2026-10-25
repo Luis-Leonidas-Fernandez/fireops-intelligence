@@ -18,6 +18,8 @@ async def sign_in_with_google(
 ) -> User:
     linked = await session.scalar(select(User).where(User.google_sub == identity.sub))
     if linked is not None:
+        if not linked.activo:
+            raise GoogleOAuthFailure("GOOGLE_ACCOUNT_CONFLICT")
         if linked.display_name is None and identity.display_name is not None:
             linked.display_name = identity.display_name
             await session.commit()
@@ -25,6 +27,8 @@ async def sign_in_with_google(
 
     existing_email = await session.scalar(select(User).where(User.email == identity.email))
     if existing_email is not None:
+        if not existing_email.activo:
+            raise GoogleOAuthFailure("GOOGLE_ACCOUNT_CONFLICT")
         if existing_email.password_hash is None or existing_email.google_sub is not None:
             raise GoogleOAuthFailure("GOOGLE_ACCOUNT_CONFLICT")
         raise GoogleOAuthFailure("GOOGLE_LINK_REQUIRED")
@@ -56,7 +60,7 @@ async def link_google_identity(
     session: AsyncSession, user_id: int, identity: GoogleIdentity
 ) -> User:
     user = await session.get(User, user_id)
-    if user is None:
+    if user is None or not user.activo:
         raise GoogleOAuthFailure("GOOGLE_LOGIN_REQUIRED")
     if user.email != identity.email:
         raise GoogleOAuthFailure("GOOGLE_EMAIL_MISMATCH")

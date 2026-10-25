@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config.settings import get_settings
 from app.infrastructure.database.session import get_database_session
-from app.modules.auth.dependencies import current_user_id
+from app.modules.auth.dependencies import current_user_id, require_active_user
 from app.modules.auth.google_oauth import (
     GoogleOAuthFailure,
     create_authorization_url,
@@ -42,7 +42,6 @@ from app.modules.auth.validations.tokens import (
     create_access_token,
 )
 from app.shared.errors.application_error import ApplicationError
-from app.shared.errors.authentication_error import AuthenticationError
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 DatabaseSession = Annotated[AsyncSession, Depends(get_database_session)]
@@ -97,13 +96,9 @@ async def logout(response: Response) -> None:
 
 
 @router.get("/me", response_model=UserResponse)
-async def current_profile(request: Request, session: DatabaseSession) -> UserResponse:
-    user_id = current_user_id(request)
-    user = await session.get(User, user_id) if user_id is not None else None
-    if user is None:
-        raise AuthenticationError(
-            code="AUTH_REQUIRED", message="Iniciá sesión para ver tu perfil."
-        )
+async def current_profile(
+    user: Annotated[User, Depends(require_active_user)],
+) -> UserResponse:
     return UserResponse.model_validate(user)
 
 
@@ -143,7 +138,8 @@ async def google_start(
     user_id = None
     if flow == "link":
         user_id = current_user_id(request)
-        if user_id is None or await session.get(User, user_id) is None:
+        user = await session.get(User, user_id) if user_id is not None else None
+        if user is None or not user.activo:
             observe_google_auth(
                 "start", "rejected", new_attempt_id(), reason="login_required"
             )
@@ -257,6 +253,9 @@ async def google_callback(
         elif flow.flow == "link":
             user_id = flow.user_id
             if user_id is None or current_user_id(request) != user_id:
+                raise GoogleOAuthFailure("GOOGLE_LOGIN_REQUIRED")
+            user = await session.get(User, user_id)
+            if user is None or not user.activo:
                 raise GoogleOAuthFailure("GOOGLE_LOGIN_REQUIRED")
             await link_google_identity(session, user_id, identity)
             response = RedirectResponse("/?auth_status=GOOGLE_LINKED", status_code=303)

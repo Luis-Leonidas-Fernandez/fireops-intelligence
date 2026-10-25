@@ -1,9 +1,31 @@
+from collections.abc import AsyncIterator
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 
 from app.config.settings import get_settings
+from app.infrastructure.database.session import get_database_session
 from app.main import app
+from app.modules.auth.models import User
 from app.modules.auth.validations.tokens import ACCESS_TOKEN_COOKIE, create_access_token
+
+
+@pytest.fixture(autouse=True)
+def active_user_session_override() -> AsyncIterator[None]:
+    class DummySession:
+        async def get(self, model: type, ident: object) -> object:
+            if model is User and ident == 1:
+                return User(id=1, email="admin@example.test", activo=True)
+            return None
+
+    async def override_get_database_session() -> AsyncIterator[DummySession]:
+        yield DummySession()
+
+    app.dependency_overrides[get_database_session] = override_get_database_session
+    try:
+        yield
+    finally:
+        app.dependency_overrides.pop(get_database_session, None)
 
 
 @pytest.mark.asyncio
@@ -24,6 +46,23 @@ async def test_root_serves_frontend() -> None:
     assert "Fire Control — Inventario general" in response.text
     assert 'src="js/app.js?v=20261004-google-auth"' in response.text
     assert response.headers["cache-control"] == "no-store"
+
+
+@pytest.mark.asyncio
+async def test_root_redirects_and_clears_cookie_for_inactive_user() -> None:
+    transport = ASGITransport(app=app)
+
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        client.cookies.set(
+            ACCESS_TOKEN_COOKIE, create_access_token(999, get_settings().secret_key)
+        )
+        response = await client.get("/")
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/iniciar-sesion"
+    set_cookie = response.headers.get("set-cookie", "")
+    assert ACCESS_TOKEN_COOKIE in set_cookie
+    assert 'max-age=0' in set_cookie.lower() or 'expires=' in set_cookie.lower()
 
 
 @pytest.mark.asyncio

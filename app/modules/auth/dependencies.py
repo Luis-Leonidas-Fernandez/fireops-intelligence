@@ -26,6 +26,18 @@ def current_user_id(request: Request) -> int | None:
         return None
 
 
+async def require_active_user(
+    request: Request, session: DatabaseSession
+) -> User:
+    user_id = current_user_id(request)
+    user = await session.get(User, user_id) if user_id is not None else None
+    if user is None or not user.activo:
+        raise AuthenticationError(
+            code="AUTH_REQUIRED", message="Iniciá sesión para ver tu perfil."
+        )
+    return user
+
+
 async def require_authenticated_user(
     request: Request, session: DatabaseSession
 ) -> User:

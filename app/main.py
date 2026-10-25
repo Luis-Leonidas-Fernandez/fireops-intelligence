@@ -22,10 +22,7 @@ from app.modules.auth.invitations.policy import require_admin
 from app.modules.auth.invitations.router import router as invitations_router
 from app.modules.auth.models import User
 from app.modules.auth.router import router as auth_router
-from app.modules.auth.validations.tokens import (
-    ACCESS_TOKEN_COOKIE,
-    validate_access_token,
-)
+from app.modules.auth.validations.tokens import ACCESS_TOKEN_COOKIE
 from app.modules.inventory.get_asset.router import router as get_asset_router
 from app.modules.inventory.register_asset.router import router as register_asset_router
 from app.modules.inventory.register_category.router import (
@@ -37,7 +34,6 @@ from app.modules.inventory.register_location.router import (
 from app.modules.inventory.transfer_asset.router import router as transfer_asset_router
 from app.modules.inventory.update_asset.router import router as update_asset_router
 from app.shared.errors.application_error import ApplicationError
-from app.shared.errors.authentication_error import AuthenticationError
 from app.shared.errors.handlers import (
     application_error_handler,
     http_error_handler,
@@ -101,14 +97,18 @@ app.mount("/js", StaticFiles(directory=frontend_dir / "js"), name="frontend-js")
 
 
 @app.get("/", response_model=None)
-async def root(request: Request) -> FileResponse | RedirectResponse:
-    token = request.cookies.get(ACCESS_TOKEN_COOKIE)
-    if token is None:
+async def root(
+    request: Request,
+    session: Annotated[AsyncSession, Depends(get_database_session)],
+) -> FileResponse | RedirectResponse:
+    user_id = current_user_id(request)
+    if user_id is None:
         return RedirectResponse("/iniciar-sesion", status_code=303)
-    try:
-        validate_access_token(token, get_settings().secret_key)
-    except AuthenticationError:
-        return RedirectResponse("/iniciar-sesion", status_code=303)
+    user = await session.get(User, user_id)
+    if user is None or not user.activo:
+        response = RedirectResponse("/iniciar-sesion", status_code=303)
+        response.delete_cookie(ACCESS_TOKEN_COOKIE, path="/", samesite="lax")
+        return response
     return FileResponse(frontend_dir / "index.html")
 
 
