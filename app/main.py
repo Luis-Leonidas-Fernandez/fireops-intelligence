@@ -5,13 +5,17 @@ from typing import Annotated
 from fastapi import Depends, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.config.settings import get_settings
 from app.infrastructure.database.session import get_database_session
+from app.infrastructure.readiness import (
+    check_database_readiness,
+    get_readiness_engine,
+)
 from app.modules.auth.dependencies import current_user_id
 from app.modules.auth.google_observability import install_oauth_callback_log_filter
 from app.modules.auth.invitations.policy import require_admin
@@ -135,4 +139,19 @@ async def sign_in_page() -> FileResponse:
 
 @app.get("/health")
 async def health_check() -> dict[str, str]:
+    """Liveness probe: verifies that the web service event loop is alive."""
     return {"status": "ok"}
+
+
+@app.get("/health/ready", response_model=None)
+async def health_ready(
+    db_engine: Annotated[AsyncEngine, Depends(get_readiness_engine)],
+) -> JSONResponse:
+    """Readiness probe: verifies database connectivity and schema compatibility."""
+    settings = get_settings()
+    status_code, payload = await check_database_readiness(
+        engine=db_engine,
+        timeout=settings.readiness_timeout_seconds,
+        check_migration=settings.check_migration_readiness,
+    )
+    return JSONResponse(status_code=status_code, content=payload)

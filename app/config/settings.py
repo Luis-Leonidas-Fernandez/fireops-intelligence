@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     registration_admin_email: str | None = None
     registration_reviewer_google_sub: str | None = Field(default=None, repr=False)
     public_base_url: str | None = None
+    readiness_timeout_seconds: float = 2.0
+    check_migration_readiness: bool = True
 
     @property
     def gmail_invitation_enabled(self) -> bool:
