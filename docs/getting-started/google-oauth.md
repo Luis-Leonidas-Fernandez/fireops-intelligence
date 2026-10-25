@@ -67,7 +67,44 @@ El servidor escribe eventos JSON `google_oauth` con un `attempt_id` aleatorio. B
 
 Los eventos no incluyen correo, usuario, código OAuth, tokens, `state`, `nonce`, respuesta del proveedor ni claves. El motor SQLAlchemy tampoco imprime consultas ni parámetros en la terminal: esos parámetros pueden contener correos y hashes. No pegues valores de `.env` ni trazas que puedan contener credenciales. Si el navegador muestra un error genérico, conservá solamente los eventos `google_oauth` del mismo `attempt_id` para diagnosticarlo.
 
-Los scripts `test-up.sh` y `test-up.ps1` arrancan Uvicorn con `--no-access-log`: esto impide que la URL del callback (que contiene `code` y `state`) aparezca en la terminal. Los eventos estructurados `google_oauth` siguen visibles. Si iniciás Uvicorn manualmente, agregá también `--no-access-log`. Después de actualizar los scripts, detené y reiniciá el servidor; `--reload` no cambia los argumentos de un proceso ya iniciado.
+Los scripts `test-up.sh` y `test-up.ps1` arrancan Uvicorn con `--no-access-log`: esto mantiene la terminal limpia de ruido HTTP. Además, la aplicación cuenta con un filtro interno (`OAuthCallbackAccessLogFilter`) en `uvicorn.access` que elimina completamente la query string de `/auth/google/callback` antes de que cualquier registro sea formateado o emitido, preservando método, ruta, status y tiempos de respuesta. De este modo, incluso si Uvicorn se inicia en producción con access logs habilitados (sin `--no-access-log`), los parámetros temporales de autenticación (`code`, `state`) nunca se imprimirán en los logs del proceso.
+
+## Seguridad en infraestructura y proxies perimetrales (Nginx / ALB / CDN)
+
+> [!WARNING]
+> La protección del filtro de logging en Python cubre **exclusivamente** el proceso local de Uvicorn/FastAPI. **No protege automáticamente** reverse proxies (Nginx, Caddy, Traefik), balanceadores de carga en la nube (AWS ALB, GCP Load Balancer), redes de distribución (Cloudflare) ni colectores de observabilidad externos si estos registran la URL entrante completa en el perímetro.
+
+Por defecto, la directiva `combined` de Nginx registra la variable `$request` (`$request_method $request_uri $server_protocol`), donde `$request_uri` contiene la query string completa con el código de autorización. Asimismo, peticiones posteriores al callback podrían capturar la URL con código en el encabezado `$http_referer`.
+
+Para evitar la persistencia de credenciales en los logs de acceso perimetrales de Nginx sin perder observabilidad operativa, se debe emplear un formato de log sanitizado que:
+1. Enmascare la query string de `/auth/google/callback` en la ruta de solicitud.
+2. Enmascare la query string si `/auth/google/callback` aparece en el encabezado `Referer`.
+3. Evite estrictamente variables que contengan parámetros sin filtrar, como `$request`, `$args` o `$query_string`.
+
+### Configuración recomendada para Nginx
+
+```nginx
+# 1. Enmascarar la query string de /auth/google/callback en la solicitud
+map $uri $sanitized_request_uri {
+    /auth/google/callback  $uri;
+    default                $request_uri;
+}
+
+# 2. Enmascarar la query string si el callback aparece como Referer en peticiones posteriores
+map $http_referer $sanitized_http_referer {
+    ~^(?<referer_base>https?://[^/?]+)?/auth/google/callback\?  "$referer_base/auth/google/callback";
+    default                                                      $http_referer;
+}
+
+# 3. Formato seguro que no expone $request, $args ni $query_string
+log_format safe_combined '$remote_addr - $remote_user [$time_local] '
+                         '"$request_method $sanitized_request_uri $server_protocol" '
+                         '$status $body_bytes_sent '
+                         '"$sanitized_http_referer" "$http_user_agent"';
+
+# 4. Aplicar el formato seguro al log de acceso del servidor
+access_log /var/log/nginx/access.log safe_combined;
+```
 
 ## Pruebas automatizadas
 

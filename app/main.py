@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated
 
@@ -12,6 +13,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.config.settings import get_settings
 from app.infrastructure.database.session import get_database_session
 from app.modules.auth.dependencies import current_user_id
+from app.modules.auth.google_observability import install_oauth_callback_log_filter
 from app.modules.auth.invitations.policy import require_admin
 from app.modules.auth.invitations.router import router as invitations_router
 from app.modules.auth.models import User
@@ -39,9 +41,19 @@ from app.shared.errors.handlers import (
     validation_error_handler,
 )
 
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    install_oauth_callback_log_filter()
+    yield
+
+
+install_oauth_callback_log_filter()
+
 app = FastAPI(
     title="Fire Control",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 

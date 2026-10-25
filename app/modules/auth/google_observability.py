@@ -5,6 +5,7 @@ import logging
 import secrets
 from datetime import UTC, datetime
 from typing import Literal
+from urllib.parse import urlsplit
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -51,3 +52,33 @@ def observe_google_auth(
         logging.WARNING if outcome in {"rejected", "failed"} else logging.INFO,
         json.dumps(event, separators=(",", ":")),
     )
+
+
+class OAuthCallbackAccessLogFilter(logging.Filter):
+    """Strips query strings from /auth/google/callback in Uvicorn access logs."""
+
+    CALLBACK_PATH = "/auth/google/callback"
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if (
+            record.args
+            and isinstance(record.args, (tuple, list))
+            and len(record.args) >= 3
+            and isinstance(record.args[2], str)
+        ):
+            raw_target = record.args[2]
+            parsed = urlsplit(raw_target)
+            if parsed.path == self.CALLBACK_PATH:
+                args = list(record.args)
+                args[2] = parsed.path
+                record.args = tuple(args)
+        return True
+
+
+def install_oauth_callback_log_filter(logger_name: str = "uvicorn.access") -> None:
+    """Idempotently attach the callback sanitization filter to the access logger."""
+    access_logger = logging.getLogger(logger_name)
+    for existing in access_logger.filters:
+        if isinstance(existing, OAuthCallbackAccessLogFilter):
+            return
+    access_logger.addFilter(OAuthCallbackAccessLogFilter())

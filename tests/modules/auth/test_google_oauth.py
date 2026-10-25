@@ -2,6 +2,10 @@ import base64
 import hashlib
 import json
 import logging
+import re
+import subprocess
+import sys
+import time
 from datetime import UTC, datetime, timedelta
 from typing import Self
 from urllib.parse import parse_qs, urlparse
@@ -10,6 +14,7 @@ from uuid import uuid4
 import jwt
 import pytest
 import pytest_asyncio
+import uvicorn
 from cryptography.hazmat.primitives.asymmetric import rsa
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
@@ -20,7 +25,11 @@ from app.main import app
 from app.modules.auth import google_oauth
 from app.modules.auth import router as auth_router
 from app.modules.auth.google_oauth import GoogleIdentity, GoogleOAuthFailure
-from app.modules.auth.google_observability import observe_google_auth
+from app.modules.auth.google_observability import (
+    OAuthCallbackAccessLogFilter,
+    install_oauth_callback_log_filter,
+    observe_google_auth,
+)
 from app.modules.auth.models import Invitation, Role, User
 from app.modules.auth.validations.google_flow import (
     GOOGLE_FLOW_COOKIE,
@@ -932,3 +941,182 @@ async def test_google_request_requires_verified_callback_before_pending_row(
     )
     assert item is not None and item.status == "pending" and item.source == "google"
     assert len(sent) == 1
+
+
+def test_oauth_access_log_filter_strips_callback_query_string() -> None:
+    access_filter = OAuthCallbackAccessLogFilter()
+    record = logging.LogRecord(
+        name="uvicorn.access",
+        level=logging.INFO,
+        pathname="",
+        lineno=0,
+        msg='%s - "%s %s HTTP/%s" %d',
+        args=(
+            "192.168.1.10:54321",
+            "GET",
+            "/auth/google/callback?code=sensitive-auth-code&state=sensitive-flow-state&scope=email",
+            "1.1",
+            303,
+        ),
+        exc_info=None,
+    )
+    result = access_filter.filter(record)
+    assert result is True
+    assert record.args[2] == "/auth/google/callback"  # type: ignore[index]
+
+    formatter = uvicorn.logging.AccessFormatter(
+        '%(levelprefix)s %(client_addr)s - "%(request_line)s" %(status_code)s'
+    )
+    formatted = formatter.format(record)
+    assert "sensitive-auth-code" not in formatted
+    assert "sensitive-flow-state" not in formatted
+    assert "192.168.1.10:54321" in formatted
+    assert "GET /auth/google/callback HTTP/1.1" in formatted
+    assert "303" in formatted
+
+
+def test_oauth_access_log_filter_preserves_other_endpoints() -> None:
+    access_filter = OAuthCallbackAccessLogFilter()
+    record = logging.LogRecord(
+        name="uvicorn.access",
+        level=logging.INFO,
+        pathname="",
+        lineno=0,
+        msg='%s - "%s %s HTTP/%s" %d',
+        args=(
+            "127.0.0.1:50000",
+            "GET",
+            "/health?check=deep&verbose=1",
+            "1.1",
+            200,
+        ),
+        exc_info=None,
+    )
+    result = access_filter.filter(record)
+    assert result is True
+    assert record.args[2] == "/health?check=deep&verbose=1"  # type: ignore[index]
+
+    formatter = uvicorn.logging.AccessFormatter(
+        '%(levelprefix)s %(client_addr)s - "%(request_line)s" %(status_code)s'
+    )
+    formatted = formatter.format(record)
+    assert "check=deep&verbose=1" in formatted
+    assert "GET /health?check=deep&verbose=1 HTTP/1.1" in formatted
+    assert "200" in formatted
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "code=test_code&state=test_state",
+        "state=test_state&code=test_code",
+        "error=access_denied&state=test_state",
+        "prompt=consent&code=test_code&authuser=0&state=test_state",
+    ],
+)
+def test_oauth_access_log_filter_query_param_order_independence(query: str) -> None:
+    access_filter = OAuthCallbackAccessLogFilter()
+    record = logging.LogRecord(
+        name="uvicorn.access",
+        level=logging.INFO,
+        pathname="",
+        lineno=0,
+        msg='%s - "%s %s HTTP/%s" %d',
+        args=(
+            "127.0.0.1:50000",
+            "GET",
+            f"/auth/google/callback?{query}",
+            "1.1",
+            303,
+        ),
+        exc_info=None,
+    )
+    access_filter.filter(record)
+    assert record.args[2] == "/auth/google/callback"  # type: ignore[index]
+    assert "test_code" not in str(record.args)
+    assert "test_state" not in str(record.args)
+
+
+def test_oauth_access_log_filter_idempotent_installation() -> None:
+    test_logger_name = f"test.uvicorn.access.{uuid4().hex}"
+    logger = logging.getLogger(test_logger_name)
+
+    assert not any(isinstance(f, OAuthCallbackAccessLogFilter) for f in logger.filters)
+    install_oauth_callback_log_filter(test_logger_name)
+    filter_count_first = sum(
+        1 for f in logger.filters if isinstance(f, OAuthCallbackAccessLogFilter)
+    )
+    assert filter_count_first == 1
+
+    # Second call must not add another filter
+    install_oauth_callback_log_filter(test_logger_name)
+    filter_count_second = sum(
+        1 for f in logger.filters if isinstance(f, OAuthCallbackAccessLogFilter)
+    )
+    assert filter_count_second == 1
+
+
+def test_real_uvicorn_access_log_integration() -> None:
+    """Verifies that an independent child Uvicorn process naturally redacts callback query strings."""
+    proc = subprocess.Popen(
+        [
+            sys.executable,
+            "-m",
+            "uvicorn",
+            "app.main:app",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            "0",
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    port: int | None = None
+    stdout_data = ""
+    stderr_data = ""
+    try:
+        start_time = time.time()
+        assert proc.stderr is not None
+        while time.time() - start_time < 5.0:
+            line = proc.stderr.readline()
+            if not line and proc.poll() is not None:
+                break
+            match = re.search(r"http://127\.0\.0\.1:(\d+)", line)
+            if match:
+                port = int(match.group(1))
+                break
+
+        assert port is not None, "Uvicorn failed to start or bind ephemeral port"
+
+        synthetic_code = f"SYNTHETIC-CODE-{uuid4().hex}"
+        synthetic_state = f"SYNTHETIC-STATE-{uuid4().hex}"
+
+        import httpx
+
+        with httpx.Client(base_url=f"http://127.0.0.1:{port}", timeout=5.0) as client:
+            health_resp = client.get("/health")
+            assert health_resp.status_code == 200
+
+            callback_resp = client.get(
+                f"/auth/google/callback?state={synthetic_state}&code={synthetic_code}"
+            )
+            assert callback_resp.status_code == 303
+
+        proc.terminate()
+        stdout_data, stderr_data = proc.communicate(timeout=3.0)
+    except Exception:
+        proc.kill()
+        proc.communicate()
+        raise
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+            proc.communicate()
+
+    combined_output = stdout_data + stderr_data
+    assert synthetic_code not in combined_output
+    assert synthetic_state not in combined_output
+    assert 'GET /auth/google/callback HTTP/1.1" 303' in stdout_data
+    assert 'GET /health HTTP/1.1" 200' in stdout_data
