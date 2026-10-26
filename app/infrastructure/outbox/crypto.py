@@ -19,7 +19,8 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 from app.shared.errors.application_error import ApplicationError
 
-DEFAULT_FORMAT_VERSION = 1
+DEFAULT_FORMAT_VERSION = 2
+SUPPORTED_FORMAT_VERSIONS = frozenset({1, 2})
 AES_256_KEY_BYTES = 32
 GCM_NONCE_BYTES = 12
 
@@ -188,9 +189,24 @@ def build_aad(
     event_type: str,
     aggregate_id: str,
     idempotency_key: str,
+    recipient_email: str | None = None,
 ) -> bytes:
-    """Build canonical Additional Authenticated Data binding payload to event identity."""
-    return f"{format_version}:{key_id}:{event_type}:{aggregate_id}:{idempotency_key}".encode()
+    """Build canonical Additional Authenticated Data binding payload to event identity.
+
+    Version 1 binds: format_version:key_id:event_type:aggregate_id:idempotency_key
+    Version 2 binds: format_version:key_id:event_type:aggregate_id:idempotency_key:recipient_email
+    """
+    if format_version == 1:
+        return f"{format_version}:{key_id}:{event_type}:{aggregate_id}:{idempotency_key}".encode()
+    elif format_version == 2:
+        norm_recipient = (recipient_email or "").strip().lower()
+        return (
+            f"{format_version}:{key_id}:{event_type}:{aggregate_id}:{idempotency_key}:{norm_recipient}".encode()
+        )
+    raise OutboxCryptoError(
+        code="OUTBOX_UNSUPPORTED_VERSION",
+        message=f"Unsupported payload format version: {format_version}",
+    )
 
 
 def encrypt_outbox_payload(
@@ -199,10 +215,11 @@ def encrypt_outbox_payload(
     event_type: str,
     aggregate_id: str,
     idempotency_key: str,
+    recipient_email: str | None = None,
     format_version: int = DEFAULT_FORMAT_VERSION,
 ) -> EncryptedPayload:
     """Encrypt a dictionary payload using AES-256-GCM authenticated with AAD."""
-    if format_version != DEFAULT_FORMAT_VERSION:
+    if format_version not in SUPPORTED_FORMAT_VERSIONS:
         raise OutboxConfigurationError(f"Unsupported format_version {format_version}")
 
     try:
@@ -220,6 +237,7 @@ def encrypt_outbox_payload(
         event_type=event_type,
         aggregate_id=aggregate_id,
         idempotency_key=idempotency_key,
+        recipient_email=recipient_email,
     )
 
     aesgcm = AESGCM(keyring.primary_key)
@@ -242,13 +260,14 @@ def decrypt_outbox_payload(
     event_type: str,
     aggregate_id: str,
     idempotency_key: str,
+    recipient_email: str | None = None,
 ) -> dict[str, Any]:
     """Decrypt and verify an outbox payload using the versioned keyring and AAD."""
     key = keyring.get_key(key_id)
     if key is None:
         raise OutboxKeyNotFoundError(key_id)
 
-    if format_version != DEFAULT_FORMAT_VERSION:
+    if format_version not in SUPPORTED_FORMAT_VERSIONS:
         raise OutboxCryptoError(
             code="OUTBOX_UNSUPPORTED_VERSION",
             message=f"Unsupported payload format version: {format_version}",
@@ -278,6 +297,7 @@ def decrypt_outbox_payload(
         event_type=event_type,
         aggregate_id=aggregate_id,
         idempotency_key=idempotency_key,
+        recipient_email=recipient_email,
     )
 
     aesgcm = AESGCM(key)
@@ -290,9 +310,20 @@ def decrypt_outbox_payload(
         result = json.loads(plaintext.decode("utf-8"))
         if not isinstance(result, dict):
             raise TypeError("Decrypted payload is not a dict")
-        return result
     except Exception as err:
         raise OutboxCryptoError(
             code="OUTBOX_PAYLOAD_DESERIALIZATION_ERROR",
             message="Decrypted payload is not valid JSON dictionary",
         ) from err
+
+    # Cryptographic & integrity defense: cross-check recipient inside payload with recipient_email
+    payload_recipient = result.get("email") or result.get("recipient_email")
+    if payload_recipient is not None and recipient_email is not None:
+        norm_payload = str(payload_recipient).strip().lower()
+        norm_expected = str(recipient_email).strip().lower()
+        if norm_payload != norm_expected:
+            raise OutboxTamperedError(
+                "Recipient email in authenticated payload does not match target recipient."
+            )
+
+    return result

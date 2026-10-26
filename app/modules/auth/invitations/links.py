@@ -30,8 +30,10 @@ def _valid_hostname(hostname: str) -> bool:
 def public_link(settings: Settings, path: str) -> str:
     """Return a link without deriving its origin from an OAuth callback."""
     raw = settings.public_base_url
+    if not raw:
+        raise PublicBaseURLConfigurationError("PUBLIC_BASE_URL is missing or invalid.")
     try:
-        parsed = urlsplit(raw or "")
+        parsed = urlsplit(raw)
         hostname = parsed.hostname or ""
         port = parsed.port
         authority_host = f"[{hostname}]" if ":" in hostname else hostname

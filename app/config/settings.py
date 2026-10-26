@@ -1,7 +1,8 @@
+import base64
 import os
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -36,6 +37,24 @@ class Settings(BaseSettings):
     outbox_encryption_key: str | None = Field(default=None, repr=False)
     outbox_encryption_key_id: str = "v1"
     outbox_secondary_encryption_keys: str | None = Field(default=None, repr=False)
+    outbox_enabled: bool = False
+
+    @model_validator(mode="after")
+    def validate_outbox_configuration(self) -> "Settings":
+        if self.outbox_enabled:
+            if not self.outbox_encryption_key:
+                raise ValueError(
+                    "outbox_encryption_key must be configured when outbox_enabled is True"
+                )
+            try:
+                raw_bytes = base64.b64decode(self.outbox_encryption_key, validate=True)
+                if len(raw_bytes) != 32:
+                    raise ValueError(
+                        f"outbox_encryption_key must be exactly 32 bytes, got {len(raw_bytes)}"
+                    )
+            except Exception as e:
+                raise ValueError(f"Invalid outbox_encryption_key: {e}") from e
+        return self
 
     @property
     def trusted_proxies_list(self) -> list[str]:

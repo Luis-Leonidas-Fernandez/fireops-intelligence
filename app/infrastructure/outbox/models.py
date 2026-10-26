@@ -23,7 +23,16 @@ from app.infrastructure.database.base import Base
 
 
 class OutboxStatus(str, enum.Enum):
-    """Operational state of an outbox event."""
+    """Operational state of an outbox event.
+
+    Note on delivery semantics:
+    DELIVERED denotes that the delivery provider (e.g. Gmail API) has accepted
+    the message for transmission (provider_accepted_at is set). It represents
+    ACCEPTED_BY_PROVIDER rather than confirmed recipient inbox receipt, which cannot
+    be proven without asynchronous webhooks or bounce notifications.
+    The system guarantees at-least-once transmission semantics with recipient-side
+    token idempotency.
+    """
 
     PENDING = "PENDING"
     PROCESSING = "PROCESSING"

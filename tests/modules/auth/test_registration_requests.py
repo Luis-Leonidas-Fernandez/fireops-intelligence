@@ -335,6 +335,63 @@ async def test_approval_commit_failure_rolls_back_after_delivery(
 
 
 @pytest.mark.asyncio
+async def test_approval_with_outbox_enabled_rolls_back_without_delivery_on_commit_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verifies that M-02Transactional Outbox never sends emails when commit fails."""
+    import base64
+
+    from app.modules.auth.invitations import workflows
+
+    events: list[str] = []
+
+    class Session:
+        def add(self, _entity: object) -> None:
+            events.append("add")
+
+        async def flush(self) -> None:
+            events.append("flush")
+
+        async def commit(self) -> None:
+            events.append("commit")
+            raise RuntimeError("controlled commit failure")
+
+        async def rollback(self) -> None:
+            events.append("rollback")
+
+    async def review(*_args: object) -> tuple[object, str]:
+        events.append("review")
+        return SimpleNamespace(id=1, email="applicant@example.test"), "invite-token"
+
+    async def send(_email: str, _link: str) -> None:
+        events.append("send")
+
+    key_b64 = base64.b64encode(b"\x07" * 32).decode("ascii")
+    settings = get_settings().model_copy(
+        update={
+            "environment": "test",
+            "public_base_url": "http://127.0.0.1:8000",
+            "google_client_id": "client",
+            "google_client_secret": "secret",
+            "google_redirect_uri": "http://127.0.0.1:8000/auth/google/callback",
+            "gmail_sender_email": "sender@example.test",
+            "gmail_refresh_token": "refresh",
+            "outbox_enabled": True,
+            "outbox_encryption_key": key_b64,
+            "outbox_encryption_key_id": "v1",
+        }
+    )
+    monkeypatch.setattr(workflows, "get_settings", lambda: settings)
+    monkeypatch.setattr(workflows, "review_request", review)
+    monkeypatch.setattr(workflows, "send_invitation_email", send)
+    with pytest.raises(RuntimeError, match="controlled commit failure"):
+        await workflows.review_registration_request(Session(), 1, 1, "approved")  # type: ignore[arg-type]
+    # Invariant: 'send' is NEVER called; outbox event added and flushed, then rolled back on commit failure
+    assert "send" not in events
+    assert events == ["review", "add", "flush", "commit", "rollback"]
+
+
+@pytest.mark.asyncio
 async def test_public_request_is_generic_and_creates_no_user(
     auth_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
