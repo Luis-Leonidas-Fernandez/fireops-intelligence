@@ -2,12 +2,13 @@
 
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Request, status
 from pydantic import BaseModel, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config.settings import get_settings
 from app.infrastructure.database.session import get_database_session
+from app.infrastructure.rate_limit.limiter import get_rate_limiter
 from app.modules.auth.dependencies import require_authenticated_user
 from app.modules.auth.invitations.errors import PublicBaseURLConfigurationError
 from app.modules.auth.invitations.mail import delivery_error
@@ -57,17 +58,32 @@ class PendingRequestResponse(BaseModel):
     status_code=status.HTTP_202_ACCEPTED,
 )
 async def request_registration(
-    payload: RegistrationRequestPayload, session: DatabaseSession
+    payload: RegistrationRequestPayload,
+    request: Request,
+    session: DatabaseSession,
 ) -> MessageResponse:
-    await submit_request(session, payload.email, "password")
+    limiter = get_rate_limiter()
+    should_submit = await limiter.check_registration_request_allowed(
+        request, payload.email
+    )
+    if should_submit:
+        await submit_request(session, payload.email, "password")
     return MessageResponse(message=GENERIC_MESSAGE)
 
 
 @router.get("/registration-requests", response_model=list[PendingRequestResponse])
 async def list_requests(
-    session: DatabaseSession, actor: CurrentUser
+    request: Request, session: DatabaseSession, actor: CurrentUser
 ) -> list[PendingRequestResponse]:
     await require_admin(session, actor)
+    settings = get_settings()
+    await get_rate_limiter().check_admin_action_limit(
+        request,
+        admin_id=actor.id,
+        action="list_requests",
+        max_requests=settings.admin_rate_limit_list_requests,
+        window_seconds=60,
+    )
     items = await list_pending_requests(session)
     return [
         PendingRequestResponse(
@@ -86,11 +102,20 @@ async def list_requests(
 async def review_registration(
     request_id: int,
     payload: ReviewPayload,
+    request: Request,
     session: DatabaseSession,
     actor: CurrentUser,
 ) -> MessageResponse:
     await require_admin(session, actor)
-    if payload.decision == "approved" and not get_settings().gmail_invitation_enabled:
+    settings = get_settings()
+    await get_rate_limiter().check_admin_action_limit(
+        request,
+        admin_id=actor.id,
+        action="review_registration",
+        max_requests=settings.admin_rate_limit_review_requests,
+        window_seconds=60,
+    )
+    if payload.decision == "approved" and not settings.gmail_invitation_enabled:
         raise delivery_error()
     try:
         await review_registration_request(session, request_id, actor.id, payload.decision)

@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config.settings import get_settings
 from app.infrastructure.database.session import get_database_session
+from app.infrastructure.rate_limit.limiter import get_rate_limiter
 from app.modules.auth.dependencies import current_user_id, require_active_user
 from app.modules.auth.google_oauth import (
     GoogleOAuthFailure,
@@ -42,6 +43,7 @@ from app.modules.auth.validations.tokens import (
     create_access_token,
 )
 from app.shared.errors.application_error import ApplicationError
+from app.shared.errors.authentication_error import AuthenticationError
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 DatabaseSession = Annotated[AsyncSession, Depends(get_database_session)]
@@ -64,8 +66,18 @@ def set_auth_cookie(response: Response, user_id: int) -> None:
     "/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED
 )
 async def register(
-    request: RegisterRequest, response: Response, session: DatabaseSession
+    request: RegisterRequest,
+    http_request: Request,
+    response: Response,
+    session: DatabaseSession,
 ) -> AuthResponse:
+    await get_rate_limiter().check_ip_limit(
+        http_request,
+        scope="register_ip",
+        max_requests=5,
+        window_seconds=60,
+        message="Demasiadas solicitudes de registro desde esta dirección. Por favor esperá un momento.",
+    )
     user = await register_user(
         session,
         request.email,
@@ -81,9 +93,19 @@ async def register(
 
 @router.post("/login", response_model=AuthResponse)
 async def login(
-    request: LoginRequest, response: Response, session: DatabaseSession
+    request: LoginRequest,
+    http_request: Request,
+    response: Response,
+    session: DatabaseSession,
 ) -> AuthResponse:
-    user = await authenticate_user(session, request.email, request.password)
+    limiter = get_rate_limiter()
+    await limiter.check_login_pre_auth(http_request, request.email)
+    try:
+        user = await authenticate_user(session, request.email, request.password)
+    except AuthenticationError:
+        await limiter.record_login_failure(http_request, request.email)
+        raise
+    await limiter.record_login_success(http_request, request.email)
     set_auth_cookie(response, user.id)
     return AuthResponse(
         message="Inicio de sesión correcto.", user=UserResponse.model_validate(user)
@@ -127,6 +149,13 @@ async def google_start(
     source: Literal["login", "register", "request"] = "login",
     next_target: str | None = Query(default=None, alias="next"),
 ) -> RedirectResponse:
+    await get_rate_limiter().check_ip_limit(
+        request,
+        scope="google_start",
+        max_requests=15,
+        window_seconds=60,
+        message="Demasiadas solicitudes de autenticación con Google. Por favor esperá un momento.",
+    )
     settings = get_settings()
     origin = "dashboard" if flow == "link" else source
     if not settings.google_oauth_enabled:
@@ -202,6 +231,13 @@ async def google_callback(
     code: str | None = None,
     error: str | None = None,
 ) -> RedirectResponse:
+    await get_rate_limiter().check_ip_limit(
+        request,
+        scope="google_callback",
+        max_requests=10,
+        window_seconds=60,
+        message="Demasiadas solicitudes hacia el callback de Google. Por favor esperá un momento.",
+    )
     settings = get_settings()
     token = request.cookies.get(GOOGLE_FLOW_COOKIE)
     if not settings.google_oauth_enabled or not token:

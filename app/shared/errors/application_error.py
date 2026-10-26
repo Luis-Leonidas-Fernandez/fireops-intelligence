@@ -9,6 +9,7 @@ class ApplicationError(Exception):
         message: str,
         status_code: int,
         details: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
     ) -> None:
         super().__init__(message)
 
@@ -16,3 +17,4 @@ class ApplicationError(Exception):
         self.message = message
         self.status_code = status_code
         self.details = details or {}
+        self.headers = headers

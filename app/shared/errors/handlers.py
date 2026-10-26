@@ -56,6 +56,7 @@ async def application_error_handler(
 ) -> JSONResponse:
     return JSONResponse(
         status_code=exc.status_code,
+        headers=exc.headers,
         content={
             "error": {"code": exc.code, "message": exc.message, "details": exc.details}
         },

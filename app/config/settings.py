@@ -23,6 +23,20 @@ class Settings(BaseSettings):
     public_base_url: str | None = None
     readiness_timeout_seconds: float = 2.0
     check_migration_readiness: bool = True
+    rate_limit_enabled: bool = True
+    rate_limit_backend: str = "memory"
+    rate_limit_redis_url: str | None = None
+    rate_limit_hmac_key: str | None = Field(default=None, repr=False)
+    trusted_proxies: str = "127.0.0.1,::1"
+    argon2_max_running: int = 2
+    argon2_max_waiting: int = 8
+    argon2_queue_timeout: float = 0.50
+    admin_rate_limit_list_requests: int = 30
+    admin_rate_limit_review_requests: int = 20
+
+    @property
+    def trusted_proxies_list(self) -> list[str]:
+        return [p.strip() for p in self.trusted_proxies.split(",") if p.strip()]
 
     @property
     def gmail_invitation_enabled(self) -> bool:
