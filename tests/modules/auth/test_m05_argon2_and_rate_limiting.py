@@ -502,10 +502,22 @@ async def test_rate_limit_backend_selection_and_validation() -> None:
     with pytest.raises(ValueError, match="Backend de rate limit no soportado"):
         get_rate_limit_storage(settings_invalid)
 
-    # 3. 'redis' backend when redis-py is not installed raises RuntimeError without silent fallback
+    # 3. 'redis' backend when redis is installed returns RedisRateLimitStorage
     reset_rate_limit_storage(None)
-    settings_redis = get_settings().model_copy(update={"rate_limit_backend": "redis"})
-    with pytest.raises(RuntimeError, match="biblioteca 'redis' no está instalada"):
+    settings_redis = get_settings().model_copy(
+        update={"rate_limit_backend": "redis", "rate_limit_redis_url": "redis://127.0.0.1:6399/0"}
+    )
+    storage_redis = get_rate_limit_storage(settings_redis)
+    assert isinstance(storage_redis, RedisRateLimitStorage)
+
+    # 4. 'redis' backend when redis-py is not installed raises RuntimeError without silent fallback
+    import sys
+
+    reset_rate_limit_storage(None)
+    with (
+        patch.dict(sys.modules, {"redis.asyncio": None}),
+        pytest.raises(RuntimeError, match="biblioteca 'redis' no está instalada"),
+    ):
         get_rate_limit_storage(settings_redis)
 
     reset_rate_limit_storage(InMemoryRateLimitStorage())

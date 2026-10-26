@@ -312,7 +312,13 @@ def create_redis_storage(settings: Settings) -> RateLimitStorage:
         ) from err
 
     redis_url = settings.rate_limit_redis_url or "redis://localhost:6379/0"
-    client = aioredis.from_url(redis_url, encoding="utf-8", decode_responses=True)
+    client = aioredis.from_url(
+        redis_url,
+        encoding="utf-8",
+        decode_responses=True,
+        socket_connect_timeout=2.0,
+        socket_timeout=2.0,
+    )
     return RedisRateLimitStorage(client=client)
 
 
