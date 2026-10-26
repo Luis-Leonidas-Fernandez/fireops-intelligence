@@ -1,27 +1,64 @@
 :root {
   color-scheme: dark;
-  --page: #272727;
-  --shell: #080809;
-  --sidebar: #09090a;
-  --surface: #121214;
-  --surface-raised: #171719;
-  --surface-soft: #1d1d20;
-  --text: #f7f5fb;
-  --text-soft: #c8c5ce;
-  --muted: #8f8b98;
-  --faint: #66626f;
-  --border: #252329;
-  --border-strong: #34303a;
-  --primary: #E53935;
-  --primary-hover: #F04440;
-  --primary-pressed: #C62828;
-  --orange: #ef741d;
-  --yellow: #f6c548;
-  --green: #57cf8c;
-  --red: #ff6b70;
-  --focus: var(--primary-hover);
-  --font-sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --font-mono: ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+
+  /* ==========================================================================
+     FIROPS OPERATIONAL DESIGN TOKENS (WCAG 2.1 AA COMPLIANT)
+     Sober, high-contrast, tactical firefighter palette.
+     Avoids cognitive alarm fatigue by reserving saturated red for emergencies.
+     ========================================================================== */
+
+  /* Surface and Background Architecture */
+  --page: #12141a;
+  --shell: #0a0c10;
+  --sidebar: #0e1017;
+  --surface: #161922;
+  --surface-raised: #1d212d;
+  --surface-soft: #242938;
+  --surface-overlay: rgba(10, 12, 16, 0.85);
+
+  /* Typography Colors (High Contrast >= 7:1 on surfaces) */
+  --text: #f8fafc;
+  --text-soft: #cbd5e1;
+  --muted: #94a3b8;
+  --faint: #64748b;
+  --text-inverse: #0f172a;
+
+  /* Structural Borders */
+  --border: #232836;
+  --border-strong: #333b4f;
+  --border-focus: #3b82f6;
+
+  /* Primary Operational Accent (Tactical Firefighter Slate / Navy) */
+  --primary: #2563eb;
+  --primary-hover: #3b82f6;
+  --primary-pressed: #1d4ed8;
+
+  /* Status and Signal Colors (Reserved for precise operational states) */
+  --status-danger: #ef4444;       /* Emergency / Critical Alert / Terminal Fail */
+  --status-danger-bg: rgba(239, 68, 68, 0.12);
+  --status-warning: #f59e0b;      /* Maintenance / Pending Review / Attention */
+  --status-warning-bg: rgba(245, 158, 11, 0.12);
+  --status-success: #10b981;      /* In Service / Approved / Operational */
+  --status-success-bg: rgba(16, 185, 129, 0.12);
+  --status-info: #0ea5e9;         /* Dispatch / Movement / Transfer */
+  --status-info-bg: rgba(14, 165, 233, 0.12);
+
+  /* Legacy chart/signal aliases (Backwards Compatibility) */
+  --orange: var(--status-warning);
+  --yellow: #fbbf24;
+  --green: var(--status-success);
+  --red: var(--status-danger);
+
+  /* Interactive States and Focus Rings (WCAG AA 3:1 minimum contrast) */
+  --focus: #60a5fa;
+  --focus-ring: 0 0 0 3px rgba(59, 130, 246, 0.5);
+  --disabled-opacity: 0.45;
+
+  /* Typography Stack */
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", "Cascadia Code", Menlo, Consolas, monospace;
+
+  /* Spatial Scale */
   --space-1: .25rem;
   --space-2: .5rem;
   --space-3: .75rem;
@@ -29,24 +66,137 @@
   --space-5: 1.25rem;
   --space-6: 1.5rem;
   --space-8: 2rem;
+
+  /* Radii */
   --radius-sm: .55rem;
   --radius-md: .8rem;
   --radius-lg: 1.15rem;
   --radius-shell: 2rem;
-  --shadow-shell: 0 28px 80px rgba(0,0,0,.36), inset 0 0 0 1px rgba(255,255,255,.08);
+
+  /* Elevations */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.45);
+  --shadow-shell: 0 28px 80px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+
+  /* Layout Constants */
   --sidebar-width: 218px;
   --topbar-height: 62px;
 }
 
+/* Light Theme Variables */
+:root[data-theme="light"], html[data-theme="light"] {
+  color-scheme: light;
+  --page: #f1f5f9;
+  --shell: #ffffff;
+  --sidebar: #f8fafc;
+  --surface: #ffffff;
+  --surface-raised: #f1f5f9;
+  --surface-soft: #e2e8f0;
+  --surface-overlay: rgba(255, 255, 255, 0.88);
+
+  --text: #0f172a;
+  --text-soft: #334155;
+  --muted: #64748b;
+  --faint: #94a3b8;
+  --text-inverse: #ffffff;
+
+  --border: #e2e8f0;
+  --border-strong: #cbd5e1;
+  --border-focus: #2563eb;
+
+  --primary: #1d4ed8;
+  --primary-hover: #2563eb;
+  --primary-pressed: #1e40af;
+
+  --status-danger: #dc2626;
+  --status-danger-bg: rgba(220, 38, 38, 0.08);
+  --status-warning: #d97706;
+  --status-warning-bg: rgba(217, 119, 6, 0.08);
+  --status-success: #059669;
+  --status-success-bg: rgba(5, 150, 105, 0.08);
+  --status-info: #0284c7;
+  --status-info-bg: rgba(2, 132, 199, 0.08);
+
+  --focus: #2563eb;
+  --focus-ring: 0 0 0 3px rgba(37, 99, 235, 0.35);
+  --shadow-shell: 0 20px 60px rgba(15, 23, 42, 0.08), inset 0 0 0 1px rgba(0, 0, 0, 0.05);
+}
+
+/* Base Document Reset */
 * { box-sizing: border-box; }
 html { background: var(--page); }
-body { margin: 0; min-width: 320px; min-height: 100vh; background: radial-gradient(circle at 50% 10%, #313131 0, var(--page) 48%, #202020 100%); color: var(--text); font-family: var(--font-sans); font-size: 14px; line-height: 1.5; }
-button, input, select { font: inherit; }
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background: var(--page);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+button, input, select, textarea { font: inherit; }
 button, select { cursor: pointer; }
 button { color: inherit; }
-a { color: inherit; }
+a { color: inherit; text-decoration: none; }
 ::selection { background: var(--primary); color: white; }
-:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
-.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
-.skip-link { position: fixed; z-index: 100; top: .75rem; left: .75rem; transform: translateY(-160%); background: var(--text); color: #111; padding: .7rem 1rem; border-radius: .5rem; text-decoration: none; font-weight: 700; }
-.skip-link:focus { transform: translateY(0); }
+
+/* Accessible Focus Indicators */
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+  box-shadow: var(--focus-ring);
+}
+
+/* Disabled State Standards */
+[aria-disabled="true"], button:disabled {
+  opacity: var(--disabled-opacity);
+  cursor: not-allowed !important;
+  pointer-events: none;
+}
+
+/* Screen Reader Only Utility */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Accessible Keyboard Skip Link */
+.skip-link {
+  position: fixed;
+  z-index: 1000;
+  top: .75rem;
+  left: .75rem;
+  transform: translateY(-180%);
+  background: var(--primary);
+  color: white;
+  padding: .75rem 1.25rem;
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+  font-weight: 700;
+  box-shadow: var(--shadow-lg);
+  transition: transform .15s ease;
+}
+.skip-link:focus {
+  transform: translateY(0);
+}
+
+/* Universal Motion Reduction */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

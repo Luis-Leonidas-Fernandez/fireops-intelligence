@@ -5,10 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Panel de demostración de inventario para Fire Control Bomberos.">
   <title>Fire Control — Inventario general</title>
-  <link rel="stylesheet" href="css/tokens.css?v=20261003-light-theme">
+  <link rel="stylesheet" href="css/tokens.css?v=20261026-m04">
   <link rel="stylesheet" href="css/components.css?v=20261004-google-auth">
   <link rel="stylesheet" href="css/layout.css?v=20261003-light-theme">
   <link rel="stylesheet" href="css/theme-light.css?v=20261003-light-theme">
+  <script src="js/api-client.js?v=20261026-m04" defer></script>
+  <script src="js/navigation.js?v=20261026-m04" defer></script>
   <script src="js/data.js?v=20261003-light-theme" defer></script>
   <script src="js/render.js?v=20261003-light-theme" defer></script>
   <script src="js/profile.js?v=20261004-profile" defer></script>
@@ -193,5 +195,7 @@
     </div>
   </div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <div id="accessible-polite-announcer" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
+  <div id="accessible-assertive-announcer" class="sr-only" role="alert" aria-live="assertive" aria-atomic="true"></div>
 </body>
 </html>
