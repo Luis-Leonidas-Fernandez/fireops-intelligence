@@ -115,8 +115,12 @@ class OutboxDispatcher:
     ) -> tuple[str, str]:
         """Format email subject and body based on event type."""
         link = payload.get("link", "")
-        if event_type == "auth.invitation.created":
-            subject = "Registro aprobado en Fire Control"
+        if event_type in ("auth.invitation.created", "auth.invitation.reissued"):
+            subject = (
+                "Registro aprobado en Fire Control"
+                if event_type == "auth.invitation.created"
+                else "Reemisión de invitación en Fire Control"
+            )
             body = (
                 f"Tu solicitud fue aprobada.\n\n"
                 f"Creá tu cuenta desde este enlace (válido por 48 horas):\n"
@@ -139,7 +143,7 @@ class OutboxDispatcher:
         self, event_type: str, payload: dict[str, Any]
     ) -> DeliveryResult | None:
         """Validate domain preconditions (expiration, revocation, consumption) before dispatching email."""
-        if event_type == "auth.invitation.created":
+        if event_type in ("auth.invitation.created", "auth.invitation.reissued"):
             now = datetime.now(UTC)
             # 1. Payload expiration check (Escenario F)
             expires_at_str = payload.get("expires_at")

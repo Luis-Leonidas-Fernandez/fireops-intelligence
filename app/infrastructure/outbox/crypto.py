@@ -19,8 +19,8 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 from app.shared.errors.application_error import ApplicationError
 
-DEFAULT_FORMAT_VERSION = 2
-SUPPORTED_FORMAT_VERSIONS = frozenset({1, 2})
+DEFAULT_FORMAT_VERSION = 3
+SUPPORTED_FORMAT_VERSIONS = frozenset({1, 2, 3})
 AES_256_KEY_BYTES = 32
 GCM_NONCE_BYTES = 12
 
@@ -195,6 +195,7 @@ def build_aad(
 
     Version 1 binds: format_version:key_id:event_type:aggregate_id:idempotency_key
     Version 2 binds: format_version:key_id:event_type:aggregate_id:idempotency_key:recipient_email
+    Version 3 binds: 3:structured_fields with explicit lengths preventing delimiter injection.
     """
     if format_version == 1:
         return f"{format_version}:{key_id}:{event_type}:{aggregate_id}:{idempotency_key}".encode()
@@ -203,6 +204,26 @@ def build_aad(
         return (
             f"{format_version}:{key_id}:{event_type}:{aggregate_id}:{idempotency_key}:{norm_recipient}".encode()
         )
+    elif format_version == 3:
+        norm_recipient = (recipient_email or "").strip().lower()
+        fields = [
+            ("key_id", key_id),
+            ("event_type", event_type),
+            ("aggregate_id", aggregate_id),
+            ("idempotency_key", idempotency_key),
+            ("recipient_email", norm_recipient),
+        ]
+        parts: list[bytes] = [b"3", str(len(fields)).encode("ascii")]
+        for name, val in fields:
+            name_b = name.encode("utf-8")
+            val_b = str(val).encode("utf-8")
+            parts.extend([
+                str(len(name_b)).encode("ascii"),
+                name_b,
+                str(len(val_b)).encode("ascii"),
+                val_b,
+            ])
+        return b":".join(parts)
     raise OutboxCryptoError(
         code="OUTBOX_UNSUPPORTED_VERSION",
         message=f"Unsupported payload format version: {format_version}",

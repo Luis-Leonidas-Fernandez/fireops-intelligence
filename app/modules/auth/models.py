@@ -3,8 +3,11 @@ from datetime import datetime
 from sqlalchemy import (
     BigInteger,
     Boolean,
+    CheckConstraint,
     DateTime,
     ForeignKey,
+    Index,
+    Integer,
     String,
     Text,
     func,
@@ -84,6 +87,13 @@ class Invitation(Base):
 
 class RegistrationRequest(Base):
     __tablename__ = "auth_registration_requests"
+    __table_args__ = (
+        CheckConstraint(
+            "reissue_count >= 0 AND reissue_count <= 3",
+            name="ck_auth_registration_requests_reissue_count",
+        ),
+        Index("ix_auth_registration_requests_last_reissue_key", "last_reissue_idempotency_key"),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     email: Mapped[str] = mapped_column(String(320), unique=True, nullable=False)
@@ -97,4 +107,13 @@ class RegistrationRequest(Base):
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     reviewed_by_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("usuarios.id")
+    )
+    reissue_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default=text("0")
+    )
+    last_reissue_idempotency_key: Mapped[str | None] = mapped_column(
+        String(128), nullable=True
+    )
+    current_invitation_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("auth_invitations.id", ondelete="SET NULL"), nullable=True
     )

@@ -23,6 +23,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.config.settings import Settings, get_settings
 from app.infrastructure.outbox.crypto import (
+    DEFAULT_FORMAT_VERSION,
     Keyring,
     OutboxCryptoError,
     decrypt_outbox_payload,
@@ -126,7 +127,7 @@ async def test_outbox_service_enqueue_persists_encrypted_event_without_commit() 
     assert event.idempotency_key == "invitation:request:42"
     assert event.recipient_email == "applicant@example.test"
     assert event.status == "PENDING"
-    assert event.payload_format_version == 2
+    assert event.payload_format_version == DEFAULT_FORMAT_VERSION
     assert event.payload_key_id == "v1"
     assert not event.payload_redacted
 

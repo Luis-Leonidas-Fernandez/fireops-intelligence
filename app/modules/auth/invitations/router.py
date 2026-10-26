@@ -2,7 +2,7 @@
 
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, Header, Request, status
 from pydantic import BaseModel, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,7 +12,8 @@ from app.infrastructure.rate_limit.limiter import get_rate_limiter
 from app.modules.auth.dependencies import require_authenticated_user
 from app.modules.auth.invitations.errors import PublicBaseURLConfigurationError
 from app.modules.auth.invitations.mail import delivery_error
-from app.modules.auth.invitations.policy import require_admin
+from app.modules.auth.invitations.policy import require_admin, require_reissue_admin
+from app.modules.auth.invitations.reissue import reissue_registration_invitation
 from app.modules.auth.invitations.requests import list_pending_requests
 from app.modules.auth.invitations.workflows import (
     review_registration_request,
@@ -43,6 +44,19 @@ class ReviewPayload(BaseModel):
 
 class MessageResponse(BaseModel):
     message: str
+
+
+class ReissueInvitationPayload(BaseModel):
+    idempotency_key: str | None = None
+    reason: str | None = None
+
+
+class ReissueInvitationResponse(BaseModel):
+    message: str
+    request_id: int
+    invitation_id: int
+    reissue_count: int
+    idempotent_replay: bool
 
 
 class PendingRequestResponse(BaseModel):
@@ -126,3 +140,62 @@ async def review_registration(
             status_code=503,
         ) from error
     return MessageResponse(message="Solicitud revisada.")
+
+
+@router.post(
+    "/registration-requests/{request_id}/reissue",
+    response_model=ReissueInvitationResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def reissue_invitation(
+    request_id: int,
+    payload: ReissueInvitationPayload,
+    request: Request,
+    session: DatabaseSession,
+    actor: CurrentUser,
+    idempotency_key_header: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
+) -> ReissueInvitationResponse:
+    idem_key = idempotency_key_header or payload.idempotency_key
+    if not idem_key or not idem_key.strip():
+        raise ApplicationError(
+            code="INVALID_IDEMPOTENCY_KEY",
+            message="Se requiere una clave de idempotencia en el header Idempotency-Key o en el cuerpo de la solicitud.",
+            status_code=400,
+        )
+
+    await require_reissue_admin(session, actor)
+    settings = get_settings()
+    await get_rate_limiter().check_admin_action_limit(
+        request,
+        admin_id=actor.id,
+        action="reissue_invitation",
+        max_requests=settings.admin_rate_limit_reissue_requests,
+        window_seconds=60,
+    )
+    if settings.outbox_enabled and not settings.gmail_invitation_enabled:
+        raise delivery_error()
+    try:
+        result = await reissue_registration_invitation(
+            session=session,
+            request_id=request_id,
+            actor=actor,
+            idempotency_key=idem_key,
+            reason=payload.reason,
+        )
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        raise
+
+    msg = (
+        "Invitación reemitida exitosamente."
+        if not result.idempotent_replay
+        else "Reemisión previa devuelta de manera idempotente."
+    )
+    return ReissueInvitationResponse(
+        message=msg,
+        request_id=result.request_id,
+        invitation_id=result.invitation_id,
+        reissue_count=result.reissue_count,
+        idempotent_replay=result.idempotent_replay,
+    )
