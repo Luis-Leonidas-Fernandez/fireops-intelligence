@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     argon2_queue_timeout: float = 0.50
     admin_rate_limit_list_requests: int = 30
     admin_rate_limit_review_requests: int = 20
+    outbox_encryption_key: str | None = Field(default=None, repr=False)
+    outbox_encryption_key_id: str = "v1"
+    outbox_secondary_encryption_keys: str | None = Field(default=None, repr=False)
 
     @property
     def trusted_proxies_list(self) -> list[str]:
