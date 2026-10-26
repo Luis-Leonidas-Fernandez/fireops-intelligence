@@ -45,6 +45,39 @@
   }
 
   /**
+   * Validates and sanitizes a redirection URL to prevent Open Redirect vulnerabilities.
+   * Only allows safe relative paths within the same origin.
+   * Rejects external protocols, protocol-relative URLs (//), and backslash tricks.
+   *
+   * @param {string|null|undefined} rawUrl
+   * @param {string} defaultUrl
+   * @returns {string}
+   */
+  function getSafeNextUrl(rawUrl, defaultUrl = "/") {
+    if (typeof rawUrl !== "string" || !rawUrl.trim()) {
+      return defaultUrl;
+    }
+    const trimmed = rawUrl.trim();
+    // Must start with exactly one "/" and NOT followed by "/" or "\"
+    if (!trimmed.startsWith("/") || trimmed.startsWith("//") || trimmed.startsWith("/\\")) {
+      return defaultUrl;
+    }
+    // Disallow backslashes and null bytes entirely
+    if (trimmed.includes("\\") || trimmed.includes("\0")) {
+      return defaultUrl;
+    }
+    try {
+      const parsed = new URL(trimmed, "http://fire-control.local");
+      if (parsed.origin !== "http://fire-control.local") {
+        return defaultUrl;
+      }
+      return parsed.pathname + parsed.search + parsed.hash;
+    } catch (_e) {
+      return defaultUrl;
+    }
+  }
+
+  /**
    * Structured API Error wrapping FastAPI ApplicationError and Starlette HTTP exceptions.
    */
   class ApiError extends Error {
@@ -101,7 +134,7 @@
     const onServiceUnavailable = config.onServiceUnavailable || function () {};
 
     /**
-     * Internal generic fetch execution wrapper.
+     * Internal generic fetch execution wrapper with transport retry support.
      */
     async function request(path, options = {}) {
       const method = (options.method || "GET").toUpperCase();
@@ -109,6 +142,8 @@
       const url = `${baseUrl}${path.startsWith("/") ? path : `/${path}`}`;
       const timeoutMs = options.timeoutMs !== undefined ? options.timeoutMs : defaultTimeoutMs;
       const credentials = options.credentials || defaultCredentials;
+      const maxRetries = options.retries !== undefined ? options.retries : (config.retries || 0);
+      const retryDelayMs = options.retryDelayMs !== undefined ? options.retryDelayMs : (config.retryDelayMs || 50);
 
       if (!headers.has("Accept")) {
         headers.set("Accept", "application/json");
@@ -123,138 +158,161 @@
         body = JSON.stringify(body);
       }
 
-      // Automatic Idempotency-Key injection for mutating operations
+      // Automatic Idempotency-Key injection for mutating operations (generated ONCE per logical user action)
       const isMutation = ["POST", "PATCH", "PUT"].includes(method);
       if (isMutation) {
         if (options.idempotencyKey) {
           headers.set("Idempotency-Key", options.idempotencyKey);
         } else if (options.autoIdempotency !== false && !headers.has("Idempotency-Key")) {
-          // If the caller provided a key in body or options, respect it; otherwise auto-generate
+          // If the caller provided a key in body or options, respect it; otherwise auto-generate ONCE
           headers.set("Idempotency-Key", generateUuidV4());
         }
       }
 
-      // AbortController setup
-      const controller = new AbortController();
-      let timeoutId = null;
-      if (timeoutMs > 0) {
-        timeoutId = setTimeout(() => {
-          controller.abort();
-        }, timeoutMs);
-      }
-
-      // Chain caller's signal if present
-      if (options.signal) {
-        options.signal.addEventListener("abort", () => controller.abort());
-      }
-
-      try {
-        const response = await fetch(url, {
-          method,
-          headers,
-          body,
-          credentials,
-          signal: controller.signal,
-        });
-
-        // Parse retry-after if present
-        let retryAfter = null;
-        const retryHeader = response.headers ? response.headers.get("Retry-After") : null;
-        if (retryHeader) {
-          const parsed = parseInt(retryHeader, 10);
-          if (!isNaN(parsed)) {
-            retryAfter = parsed;
-          }
+      let attempt = 0;
+      while (true) {
+        // AbortController setup per attempt
+        const controller = new AbortController();
+        let timeoutId = null;
+        if (timeoutMs > 0) {
+          timeoutId = setTimeout(() => {
+            controller.abort();
+          }, timeoutMs);
         }
 
-        if (response.status === 204) {
-          return { ok: true, status: 204, data: null, headers: response.headers };
+        // Chain caller's signal if present
+        if (options.signal) {
+          options.signal.addEventListener("abort", () => controller.abort());
         }
 
-        // Attempt JSON parse
-        let responseData = null;
-        const contentType = response.headers ? response.headers.get("content-type") || "" : "";
-        if (contentType.includes("application/json")) {
-          try {
-            responseData = await response.json();
-          } catch (_e) {
-            responseData = null;
-          }
-        } else {
-          try {
-            responseData = await response.text();
-          } catch (_e) {
-            responseData = null;
-          }
-        }
+        try {
+          const response = await fetch(url, {
+            method,
+            headers,
+            body,
+            credentials,
+            signal: controller.signal,
+          });
 
-        if (!response.ok) {
-          let code = `HTTP_${response.status}`;
-          let message = response.statusText || "Error en la petición";
-          let details = {};
-
-          if (responseData && typeof responseData === "object" && responseData.error) {
-            code = responseData.error.code || code;
-            message = responseData.error.message || message;
-            details = responseData.error.details || details;
-          } else if (responseData && typeof responseData === "object" && responseData.detail) {
-            message = typeof responseData.detail === "string" ? responseData.detail : message;
-            details = responseData;
+          // Parse retry-after if present
+          let retryAfter = null;
+          const retryHeader = response.headers ? response.headers.get("Retry-After") : null;
+          if (retryHeader) {
+            const parsed = parseInt(retryHeader, 10);
+            if (!isNaN(parsed)) {
+              retryAfter = parsed;
+            }
           }
 
-          const apiError = new ApiError({
-            message,
-            code,
+          // Check if retryable server error (503) and attempts remain
+          if (response.status === 503 && attempt < maxRetries) {
+            attempt++;
+            if (timeoutId !== null) clearTimeout(timeoutId);
+            const delay = retryAfter ? retryAfter * 1000 : retryDelayMs * Math.pow(2, attempt - 1);
+            await new Promise((resolve) => setTimeout(resolve, delay));
+            continue;
+          }
+
+          if (response.status === 204) {
+            return { ok: true, status: 204, data: null, headers: response.headers };
+          }
+
+          // Attempt JSON parse
+          let responseData = null;
+          const contentType = response.headers ? response.headers.get("content-type") || "" : "";
+          if (contentType.includes("application/json")) {
+            try {
+              responseData = await response.json();
+            } catch (_e) {
+              responseData = null;
+            }
+          } else {
+            try {
+              responseData = await response.text();
+            } catch (_e) {
+              responseData = null;
+            }
+          }
+
+          if (!response.ok) {
+            let code = `HTTP_${response.status}`;
+            let message = response.statusText || "Error en la petición";
+            let details = {};
+
+            if (responseData && typeof responseData === "object" && responseData.error) {
+              code = responseData.error.code || code;
+              message = responseData.error.message || message;
+              details = responseData.error.details || details;
+            } else if (responseData && typeof responseData === "object" && responseData.detail) {
+              message = typeof responseData.detail === "string" ? responseData.detail : message;
+              details = responseData;
+            }
+
+            const apiError = new ApiError({
+              message,
+              code,
+              status: response.status,
+              details,
+              retryAfter,
+              url,
+            });
+
+            // Trigger appropriate lifecycle hooks
+            if (response.status === 401) {
+              onUnauthorized(apiError, { url, method });
+            } else if (response.status === 403) {
+              onForbidden(apiError, { url, method });
+            } else if (response.status === 422) {
+              onValidationError(apiError, { url, method });
+            } else if (response.status === 429) {
+              onRateLimited(apiError, retryAfter, { url, method });
+            } else if (response.status === 503) {
+              onServiceUnavailable(apiError, { url, method });
+            }
+
+            throw apiError;
+          }
+
+          return {
+            ok: true,
             status: response.status,
-            details,
-            retryAfter,
+            data: responseData,
+            headers: response.headers,
+          };
+        } catch (err) {
+          if (timeoutId !== null) {
+            clearTimeout(timeoutId);
+          }
+          if (err instanceof ApiError) {
+            throw err;
+          }
+
+          const isAbort = err.name === "AbortError" || controller.signal.aborted;
+          if (attempt < maxRetries) {
+            attempt++;
+            const delay = retryDelayMs * Math.pow(2, attempt - 1);
+            await new Promise((resolve) => setTimeout(resolve, delay));
+            continue;
+          }
+
+          const fallbackError = new ApiError({
+            message: isAbort
+              ? `La solicitud excedió el tiempo límite de ${timeoutMs}ms.`
+              : err.message || "Error de red o conexión no disponible.",
+            code: isAbort ? "TIMEOUT" : "NETWORK_ERROR",
+            status: 0,
+            isTimeout: isAbort,
             url,
           });
 
-          // Trigger appropriate lifecycle hooks
-          if (response.status === 401) {
-            onUnauthorized(apiError, { url, method });
-          } else if (response.status === 403) {
-            onForbidden(apiError, { url, method });
-          } else if (response.status === 422) {
-            onValidationError(apiError, { url, method });
-          } else if (response.status === 429) {
-            onRateLimited(apiError, retryAfter, { url, method });
-          } else if (response.status === 503) {
-            onServiceUnavailable(apiError, { url, method });
+          if (isAbort) {
+            onServiceUnavailable(fallbackError, { url, method });
           }
-
-          throw apiError;
-        }
-
-        return {
-          ok: true,
-          status: response.status,
-          data: responseData,
-          headers: response.headers,
-        };
-      } catch (err) {
-        if (err instanceof ApiError) {
-          throw err;
-        }
-        const isAbort = err.name === "AbortError" || controller.signal.aborted;
-        const fallbackError = new ApiError({
-          message: isAbort
-            ? `La solicitud excedió el tiempo límite de ${timeoutMs}ms.`
-            : err.message || "Error de red o conexión no disponible.",
-          code: isAbort ? "TIMEOUT" : "NETWORK_ERROR",
-          status: 0,
-          isTimeout: isAbort,
-          url,
-        });
-
-        if (isAbort) {
-          onServiceUnavailable(fallbackError, { url, method });
-        }
-        throw fallbackError;
-      } finally {
-        if (timeoutId !== null) {
-          clearTimeout(timeoutId);
+          throw fallbackError;
+        } finally {
+          if (timeoutId !== null) {
+            clearTimeout(timeoutId);
+          }
         }
       }
     }
@@ -319,6 +377,7 @@
       inventory,
       system,
       generateUuidV4,
+      getSafeNextUrl,
     });
   }
 
@@ -326,5 +385,6 @@
     createApiClient,
     ApiError,
     generateUuidV4,
+    getSafeNextUrl,
   });
 });

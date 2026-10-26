@@ -42,6 +42,7 @@ class UserResponse(BaseModel):
     id: int
     email: str
     display_name: str | None
+    role: str | None = None
 
 
 class AuthResponse(BaseModel):

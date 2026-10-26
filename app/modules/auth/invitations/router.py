@@ -129,8 +129,20 @@ async def review_registration(
         max_requests=settings.admin_rate_limit_review_requests,
         window_seconds=60,
     )
-    if payload.decision == "approved" and not settings.gmail_invitation_enabled:
-        raise delivery_error()
+    if payload.decision == "approved":
+        if not settings.outbox_enabled and not settings.gmail_invitation_enabled:
+            raise delivery_error()
+        if settings.outbox_enabled:
+            try:
+                from app.infrastructure.outbox.service import OutboxService
+
+                OutboxService.from_settings(settings)
+            except Exception as err:
+                raise ApplicationError(
+                    code="OUTBOX_CONFIGURATION_INVALID",
+                    message="La infraestructura de entrega diferida (Outbox) no está correctamente configurada.",
+                    status_code=503,
+                ) from err
     try:
         await review_registration_request(session, request_id, actor.id, payload.decision)
     except PublicBaseURLConfigurationError as error:
@@ -172,8 +184,19 @@ async def reissue_invitation(
         max_requests=settings.admin_rate_limit_reissue_requests,
         window_seconds=60,
     )
-    if settings.outbox_enabled and not settings.gmail_invitation_enabled:
+    if not settings.outbox_enabled and not settings.gmail_invitation_enabled:
         raise delivery_error()
+    if settings.outbox_enabled:
+        try:
+            from app.infrastructure.outbox.service import OutboxService
+
+            OutboxService.from_settings(settings)
+        except Exception as err:
+            raise ApplicationError(
+                code="OUTBOX_CONFIGURATION_INVALID",
+                message="La infraestructura de entrega diferida (Outbox) no está correctamente configurada.",
+                status_code=503,
+            ) from err
     try:
         result = await reissue_registration_invitation(
             session=session,
@@ -181,6 +204,7 @@ async def reissue_invitation(
             actor=actor,
             idempotency_key=idem_key,
             reason=payload.reason,
+            settings=settings,
         )
         await session.commit()
     except Exception:

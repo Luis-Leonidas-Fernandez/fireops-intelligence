@@ -62,6 +62,13 @@
   }
 
   function setActiveView(view) {
+    if (window.FireNavigationController && typeof window.FireNavigationController.selectView === "function") {
+      const allowed = window.FireNavigationController.selectView(view);
+      if (!allowed) {
+        showToast(`Acceso denegado a ${view}`);
+        return;
+      }
+    }
     document.querySelectorAll("[data-view]").forEach(button => {
       const active = button.dataset.view === view;
       button.classList.toggle("is-active", active);
@@ -83,6 +90,10 @@
     const blob = new Blob([rows.map(row => row.map(csvCell).join(",")).join("\n")], { type: "text/csv;charset=utf-8" });
     const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `fire-control-inventario-demo-${dateRange.value}-dias.csv`; document.body.append(link); link.click(); link.remove(); URL.revokeObjectURL(link.href);
     showToast("CSV de demostración exportado");
+  }
+
+  if (window.FireNavigation && typeof window.FireNavigation.createNavigationController === "function") {
+    window.FireNavigationController = window.FireNavigation.createNavigationController();
   }
 
   renderer.render(dateRange.value);

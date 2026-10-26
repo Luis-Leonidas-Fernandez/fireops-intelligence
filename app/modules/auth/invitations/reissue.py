@@ -1,7 +1,7 @@
 """Administrative invitation reissuance workflow.
 
-Provides secure, auditable, and idempotent reissuance for expired, revoked,
-or terminal delivery failed invitations, serialized with row-level locks
+Provides secure, auditable, and persistent idempotent reissuance for expired,
+revoked, or terminal delivery failed invitations, serialized with row-level locks
 and bounded by persistent database constraints (max 3 reissues).
 """
 
@@ -16,7 +16,12 @@ from uuid import UUID, uuid4
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config.settings import get_settings
+from app.config.settings import Settings, get_settings
+from app.infrastructure.idempotency.service import (
+    compute_request_hash,
+    get_idempotency_record,
+    record_idempotent_operation,
+)
 from app.infrastructure.outbox.models import OutboxEvent
 from app.infrastructure.outbox.service import OutboxService
 from app.modules.auth.invitations.links import public_link
@@ -30,6 +35,7 @@ from app.shared.errors.application_error import ApplicationError
 logger = logging.getLogger("uvicorn.error")
 
 MAX_REISSUES_PER_REQUEST = 3
+IDEMPOTENCY_SCOPE_REISSUE = "invitation.reissue"
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,22 +56,45 @@ async def reissue_registration_invitation(
     idempotency_key: str,
     reason: str | None = None,
     correlation_id: UUID | None = None,
+    settings: Settings | None = None,
 ) -> ReissueResult:
     """Reissue an invitation under strict administrative control.
 
     1. Authenticates and authorizes administrator (ADMINISTRADOR role required).
-    2. Serializes reissues per request via SELECT FOR UPDATE on RegistrationRequest.
-    3. Detects request-level idempotency to safely return replay responses without duplicate work.
-    4. Enforces persistent maximum of 3 reissues per request.
-    5. Validates eligibility: prior invitation must be expired or associate with DEAD_LETTER outbox event.
-    6. Invalidates prior invitations and securely generates fresh token (hash persisted, raw token ephemeral).
-    7. Enqueues authenticated, encrypted OutboxEvent (Format Version 3 with length-prefixed AAD).
-    8. Records immutable AuditChange in auditoria_cambios within the same transaction.
+    2. Enforces fail-closed delivery check BEFORE modifying any persistent state.
+    3. Validates and canonicalizes idempotency key and computes request hash.
+    4. Checks persistent server-side idempotency registry for deterministic replays
+       and parameter mismatch conflict detection (HTTP 409).
+    5. Serializes reissues per request via SELECT FOR UPDATE on RegistrationRequest.
+    6. Re-verifies idempotency under lock to handle concurrent race conditions.
+    7. Enforces persistent maximum of 3 reissues per request.
+    8. Validates eligibility: prior invitation must be expired or associate with DEAD_LETTER outbox event.
+    9. Invalidates prior invitations and securely generates fresh token (hash persisted, raw token ephemeral).
+    10. Enqueues authenticated, encrypted OutboxEvent (or legacy mailer if outbox disabled).
+    11. Records immutable AuditChange in auditoria_cambios.
+    12. Persists executed operation in idempotency_records within the same transaction.
     """
     # 1. Authorize actor
     await require_reissue_admin(session, actor)
 
-    # 2. Validate idempotency key
+    # 2. Fail-closed delivery mechanism verification (P1-A Remediation)
+    if settings is None:
+        settings = get_settings()
+    if not settings.outbox_enabled and not settings.gmail_invitation_enabled:
+        raise delivery_error()
+
+    outbox_service: OutboxService | None = None
+    if settings.outbox_enabled:
+        try:
+            outbox_service = OutboxService.from_settings(settings)
+        except Exception as err:
+            raise ApplicationError(
+                code="OUTBOX_CONFIGURATION_INVALID",
+                message="La infraestructura de entrega diferida (Outbox) no está correctamente configurada.",
+                status_code=503,
+            ) from err
+
+    # 3. Validate idempotency key and compute canonical request hash (P1-B Remediation)
     clean_idempotency_key = (idempotency_key or "").strip()
     if not clean_idempotency_key or len(clean_idempotency_key) > 128:
         raise ApplicationError(
@@ -74,7 +103,38 @@ async def reissue_registration_invitation(
             status_code=400,
         )
 
-    # 3. Lock RegistrationRequest row
+    scope = IDEMPOTENCY_SCOPE_REISSUE
+    agg_id = str(request_id)
+    canonical_params = {
+        "request_id": request_id,
+        "reason": (reason or "").strip(),
+    }
+    req_hash = compute_request_hash(canonical_params)
+
+    # 4. Check persistent historical idempotency registry (survives restarts, multiple reissues, and replays)
+    existing_record = await get_idempotency_record(
+        session,
+        scope=scope,
+        aggregate_id=agg_id,
+        idempotency_key=clean_idempotency_key,
+        for_update=False,
+    )
+    if existing_record is not None:
+        if existing_record.request_hash != req_hash:
+            raise ApplicationError(
+                code="IDEMPOTENCY_CONFLICT",
+                message="La clave de idempotencia ya fue utilizada previamente con parámetros distintos.",
+                status_code=409,
+            )
+        data = existing_record.response_data
+        return ReissueResult(
+            request_id=data["request_id"],
+            invitation_id=data["invitation_id"],
+            reissue_count=data["reissue_count"],
+            idempotent_replay=True,
+        )
+
+    # 5. Lock RegistrationRequest row to serialize mutations
     request_item = await session.scalar(
         select(RegistrationRequest)
         .where(RegistrationRequest.id == request_id)
@@ -87,7 +147,7 @@ async def reissue_registration_invitation(
             status_code=404,
         )
 
-    # 4. Verify request status
+    # Verify request status
     if request_item.status != "approved":
         raise ApplicationError(
             code="REGISTRATION_REQUEST_NOT_APPROVED",
@@ -95,7 +155,30 @@ async def reissue_registration_invitation(
             status_code=400,
         )
 
-    # 5. Check request-level idempotency
+    # 6. Re-check idempotency under lock to handle concurrent race conditions
+    locked_record = await get_idempotency_record(
+        session,
+        scope=scope,
+        aggregate_id=agg_id,
+        idempotency_key=clean_idempotency_key,
+        for_update=True,
+    )
+    if locked_record is not None:
+        if locked_record.request_hash != req_hash:
+            raise ApplicationError(
+                code="IDEMPOTENCY_CONFLICT",
+                message="La clave de idempotencia ya fue utilizada previamente con parámetros distintos.",
+                status_code=409,
+            )
+        data = locked_record.response_data
+        return ReissueResult(
+            request_id=data["request_id"],
+            invitation_id=data["invitation_id"],
+            reissue_count=data["reissue_count"],
+            idempotent_replay=True,
+        )
+
+    # Legacy request-level idempotency fallback (for records predating idempotency_records)
     if request_item.last_reissue_idempotency_key == clean_idempotency_key:
         inv_id = request_item.current_invitation_id
         if inv_id is None:
@@ -113,7 +196,7 @@ async def reissue_registration_invitation(
             idempotent_replay=True,
         )
 
-    # 6. Check persistent reissue ceiling
+    # 7. Check persistent reissue ceiling
     current_reissue_count = request_item.reissue_count or 0
     if current_reissue_count >= MAX_REISSUES_PER_REQUEST:
         raise ApplicationError(
@@ -122,7 +205,7 @@ async def reissue_registration_invitation(
             status_code=429,
         )
 
-    # 7. Verify user is not already registered
+    # 8. Verify user is not already registered
     existing_user = await session.scalar(
         select(User.id).where(User.email == request_item.email)
     )
@@ -133,7 +216,7 @@ async def reissue_registration_invitation(
             status_code=409,
         )
 
-    # 8. Lock prior invitations and verify eligibility
+    # 9. Lock prior invitations and verify eligibility
     prior_invitations = (
         await session.scalars(
             select(Invitation)
@@ -176,11 +259,11 @@ async def reissue_registration_invitation(
             status_code=400,
         )
 
-    # 9. Invalidate all prior invitations (revocation via timestamp ceiling)
+    # 10. Invalidate all prior invitations (revocation via timestamp ceiling)
     for inv in prior_invitations:
         inv.expires_at = min(inv.expires_at, now)
 
-    # 10. Generate fresh cryptographic token & hash
+    # 11. Generate fresh cryptographic token & hash
     role = await session.scalar(
         select(Role).where(Role.nombre == "SUPERVISOR", Role.activo.is_(True))
     )
@@ -205,19 +288,16 @@ async def reissue_registration_invitation(
     session.add(new_invitation)
     await session.flush()
 
-    # 11. Update RegistrationRequest
+    # 12. Update RegistrationRequest
     prior_count = request_item.reissue_count or 0
     request_item.reissue_count = prior_count + 1
     request_item.last_reissue_idempotency_key = clean_idempotency_key
     request_item.current_invitation_id = new_invitation.id
 
-    # 12. Enqueue Outbox Event
-    settings = get_settings()
+    # 13. Delivery execution (Deterministic policy without double sending)
     if settings.outbox_enabled:
-        if not settings.gmail_invitation_enabled:
-            raise delivery_error()
+        assert outbox_service is not None
         link = public_link(settings, f"/registro#invite={token}")
-        outbox_service = OutboxService.from_settings(settings)
         await outbox_service.enqueue_event(
             session=session,
             event_type="auth.invitation.reissued",
@@ -235,13 +315,13 @@ async def reissue_registration_invitation(
             idempotency_key=f"invitation:reissue:{request_item.id}:{request_item.reissue_count}:{clean_idempotency_key}",
         )
     else:
-        if settings.gmail_invitation_enabled:
-            await send_invitation_email(
-                request_item.email,
-                public_link(settings, f"/registro#invite={token}"),
-            )
+        # Legacy direct delivery (settings.gmail_invitation_enabled must be True here)
+        await send_invitation_email(
+            request_item.email,
+            public_link(settings, f"/registro#invite={token}"),
+        )
 
-    # 13. Record audit entry in auditoria_cambios
+    # 14. Record audit entry in auditoria_cambios
     op_uuid = correlation_id or uuid4()
     audit_entry = AuditChange(
         operacion_id=op_uuid,
@@ -265,6 +345,23 @@ async def reissue_registration_invitation(
         realizado_por_usuario_id=actor.id,
     )
     session.add(audit_entry)
+
+    # 15. Persist operation in persistent idempotency registry
+    response_payload = {
+        "request_id": request_item.id,
+        "invitation_id": new_invitation.id,
+        "reissue_count": request_item.reissue_count,
+    }
+    await record_idempotent_operation(
+        session,
+        scope=scope,
+        aggregate_id=agg_id,
+        idempotency_key=clean_idempotency_key,
+        request_hash=req_hash,
+        response_status=200,
+        response_data=response_payload,
+        expires_at=None,
+    )
 
     return ReissueResult(
         request_id=request_item.id,

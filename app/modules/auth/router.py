@@ -21,7 +21,7 @@ from app.modules.auth.google_service import link_google_identity, sign_in_with_g
 from app.modules.auth.invitations.errors import PublicBaseURLConfigurationError
 from app.modules.auth.invitations.service import token_digest
 from app.modules.auth.invitations.workflows import submit_request
-from app.modules.auth.models import User
+from app.modules.auth.models import Role, User
 from app.modules.auth.schemas import (
     AuthResponse,
     LoginRequest,
@@ -86,8 +86,19 @@ async def register(
         request.invitation_token,
     )
     set_auth_cookie(response, user.id)
+    role_name: str | None = None
+    if user.rol_id is not None:
+        role = await session.get(Role, user.rol_id)
+        if role is not None:
+            role_name = role.nombre
     return AuthResponse(
-        message="Cuenta creada correctamente.", user=UserResponse.model_validate(user)
+        message="Cuenta creada correctamente.",
+        user=UserResponse(
+            id=user.id,
+            email=user.email,
+            display_name=user.display_name,
+            role=role_name,
+        ),
     )
 
 
@@ -107,8 +118,19 @@ async def login(
         raise
     await limiter.record_login_success(http_request, request.email)
     set_auth_cookie(response, user.id)
+    role_name = None
+    if user.rol_id is not None:
+        role = await session.get(Role, user.rol_id)
+        if role is not None:
+            role_name = role.nombre
     return AuthResponse(
-        message="Inicio de sesión correcto.", user=UserResponse.model_validate(user)
+        message="Inicio de sesión correcto.",
+        user=UserResponse(
+            id=user.id,
+            email=user.email,
+            display_name=user.display_name,
+            role=role_name,
+        ),
     )
 
 
@@ -120,8 +142,19 @@ async def logout(response: Response) -> None:
 @router.get("/me", response_model=UserResponse)
 async def current_profile(
     user: Annotated[User, Depends(require_active_user)],
+    session: DatabaseSession,
 ) -> UserResponse:
-    return UserResponse.model_validate(user)
+    role_name: str | None = None
+    if user.rol_id is not None:
+        role = await session.get(Role, user.rol_id)
+        if role is not None:
+            role_name = role.nombre
+    return UserResponse(
+        id=user.id,
+        email=user.email,
+        display_name=user.display_name,
+        role=role_name,
+    )
 
 
 def google_error_response(

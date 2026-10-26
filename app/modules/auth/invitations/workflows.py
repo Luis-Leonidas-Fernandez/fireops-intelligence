@@ -12,7 +12,6 @@ from app.modules.auth.invitations.approval import review_request
 from app.modules.auth.invitations.errors import PublicBaseURLConfigurationError
 from app.modules.auth.invitations.links import public_link
 from app.modules.auth.invitations.mail import (
-    delivery_error,
     send_invitation_email,
     send_registration_notice,
 )
@@ -110,8 +109,6 @@ async def review_registration_request(
         item, token = await review_request(session, request_id, actor_id, decision)
         if token is not None:
             if settings.outbox_enabled:
-                if not settings.gmail_invitation_enabled:
-                    raise delivery_error()
                 link = public_link(settings, f"/registro#invite={token}")
                 outbox_service = OutboxService.from_settings(settings)
                 token_hash = token_digest(token)

@@ -100,7 +100,14 @@
         status.textContent = body.message || "Acceso correcto.";
         status.hidden = false;
         status.dataset.state = "success";
-        window.setTimeout(() => window.location.assign("/"), 450);
+        const nextParam = new URLSearchParams(window.location.search || "").get("next");
+        const safeNext = (window.FireApiClient && typeof window.FireApiClient.getSafeNextUrl === "function")
+          ? window.FireApiClient.getSafeNextUrl(nextParam, "/")
+          : (function (url) {
+              if (!url || typeof url !== "string" || !url.startsWith("/") || url.startsWith("//") || url.includes("\\")) return "/";
+              return url;
+            })(nextParam);
+        window.setTimeout(() => window.location.assign(safeNext), 450);
       } catch (_error) {
         showError("NETWORK_ERROR", "No pudimos conectar con el servidor. Intentá nuevamente.");
       } finally {
