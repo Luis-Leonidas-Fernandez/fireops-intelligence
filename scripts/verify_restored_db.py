@@ -28,6 +28,8 @@ EXPECTED_TABLES: set[str] = {
     "ubicaciones",
     "movimientos",
     "auditoria_cambios",
+    "outbox_events",
+    "idempotency_records",
     "alembic_version",
 }
 
@@ -136,6 +138,8 @@ async def verify_sequences(conn: asyncpg.Connection) -> list[str]:
         "usuarios_id_seq": ("usuarios", "id"),
         "auth_invitations_id_seq": ("auth_invitations", "id"),
         "auth_registration_requests_id_seq": ("auth_registration_requests", "id"),
+        "outbox_events_id_seq": ("outbox_events", "id"),
+        "idempotency_records_id_seq": ("idempotency_records", "id"),
     }
 
     for seq in sequences:
@@ -289,8 +293,94 @@ async def verify_functional_h01_cycle_rejection(
     return errors
 
 
+async def verify_row_counts(
+    conn: asyncpg.Connection, expected_counts: dict[str, int] | None
+) -> list[str]:
+    """Verify table row counts against expected counts from manifest if provided."""
+    if not expected_counts:
+        return []
+    errors: list[str] = []
+    for table_name, expected_count in expected_counts.items():
+        if not re.match(r"^[a-zA-Z0-9_]+$", table_name):
+            continue
+        try:
+            actual_count = await conn.fetchval(
+                f"SELECT count(*) FROM {table_name};"
+            )
+            if actual_count != expected_count:
+                errors.append(
+                    f"Row count mismatch in table '{table_name}': expected {expected_count}, found {actual_count}"
+                )
+        except Exception as e:
+            errors.append(
+                f"Failed to query row count for table '{table_name}': {e}"
+            )
+    return errors
+
+
+async def verify_admin_identity(
+    conn: asyncpg.Connection, expected_admin: dict[str, Any] | None
+) -> list[str]:
+    """Verify presence and attributes of primary administrator without leaking secrets."""
+    if not expected_admin:
+        return []
+    errors: list[str] = []
+    admin_email = expected_admin.get("email")
+    if not admin_email:
+        return errors
+
+    row = await conn.fetchrow(
+        """
+        SELECT u.id, u.email, u.activo, u.password_hash IS NULL AS pwd_null,
+               r.nombre AS rol_nombre, r.activo AS rol_activo,
+               left(u.google_sub, 4) || '...' || right(u.google_sub, 4) AS masked_sub,
+               length(u.google_sub) as sub_len
+        FROM usuarios u
+        JOIN roles r ON r.id = u.rol_id
+        WHERE u.email = $1;
+        """,
+        admin_email,
+    )
+
+    if not row:
+        return [f"Admin user '{admin_email}' not found in usuarios table."]
+
+    if not row["activo"]:
+        errors.append(f"Admin user '{admin_email}' is marked inactive (activo=False).")
+
+    if expected_admin.get("password_hash_null") and not row["pwd_null"]:
+        errors.append(f"Admin user '{admin_email}' unexpectedly has a non-null password_hash.")
+
+    expected_role = expected_admin.get("rol", "ADMINISTRADOR")
+    if row["rol_nombre"] != expected_role:
+        errors.append(
+            f"Admin user '{admin_email}' has unexpected role '{row['rol_nombre']}' (expected '{expected_role}')."
+        )
+
+    if not row["rol_activo"]:
+        errors.append(f"Admin role '{row['rol_nombre']}' is inactive.")
+
+    expected_sub_len = expected_admin.get("google_sub_length")
+    if expected_sub_len is not None and row["sub_len"] != expected_sub_len:
+        errors.append(
+            f"Admin user google_sub length mismatch: expected {expected_sub_len}, found {row['sub_len']}."
+        )
+
+    expected_sub_masked = expected_admin.get("google_sub_masked")
+    if expected_sub_masked and row["masked_sub"] != expected_sub_masked:
+        errors.append(
+            f"Admin user masked google_sub mismatch: expected {expected_sub_masked}, found {row['masked_sub']}."
+        )
+
+    return errors
+
+
 async def run_all_verifications(
-    db_input: str, expected_rev: str | None, check_cycle: bool
+    db_input: str,
+    expected_rev: str | None,
+    check_cycle: bool,
+    expected_counts: dict[str, int] | None = None,
+    expected_admin: dict[str, Any] | None = None,
 ) -> tuple[bool, dict[str, Any]]:
     dsn = build_asyncpg_dsn(db_input)
     db_name = urlsplit(dsn).path.lstrip("/")
@@ -304,6 +394,8 @@ async def run_all_verifications(
         sequence_errs = await verify_sequences(conn)
         h01_errs = await verify_h01_trigger_integrity(conn)
         alembic_errs = await verify_alembic_version(conn, expected_rev)
+        row_count_errs = await verify_row_counts(conn, expected_counts)
+        admin_errs = await verify_admin_identity(conn, expected_admin)
 
         cycle_errs: list[str] = []
         if check_cycle:
@@ -316,6 +408,8 @@ async def run_all_verifications(
             + h01_errs
             + alembic_errs
             + cycle_errs
+            + row_count_errs
+            + admin_errs
         )
 
         alembic_ver = await conn.fetchval(
@@ -334,11 +428,17 @@ async def run_all_verifications(
                 ),
                 "sequences": "PASSED" if not sequence_errs else sequence_errs,
                 "h01_triggers": "PASSED" if not h01_errs else h01_errs,
-                "alembic_version": "PASSED"
-                if not alembic_errs
-                else alembic_errs,
+                "alembic_version": (
+                    "PASSED" if not alembic_errs else alembic_errs
+                ),
                 "h01_functional_cycle_rejection": (
                     "PASSED" if not cycle_errs else cycle_errs
+                ),
+                "table_row_counts": (
+                    "PASSED" if not row_count_errs else row_count_errs
+                ),
+                "admin_identity": (
+                    "PASSED" if not admin_errs else admin_errs
                 ),
             },
             "error_count": len(all_errors),
@@ -348,18 +448,31 @@ async def run_all_verifications(
         await conn.close()
 
 
-def load_expected_alembic_rev(meta_path: str | None) -> str | None:
-    """Load expected Alembic revision from metadata file if provided."""
-    if not meta_path or not os.path.exists(meta_path):
-        return None
+def load_verification_context(
+    manifest_or_meta_path: str | None,
+) -> tuple[str | None, dict[str, int] | None, dict[str, Any] | None]:
+    """Extract expected Alembic revision, row counts, and admin attributes from manifest or meta file."""
+    if not manifest_or_meta_path or not os.path.exists(manifest_or_meta_path):
+        return (None, None, None)
     try:
-        with open(meta_path, encoding="utf-8") as f:
+        with open(manifest_or_meta_path, encoding="utf-8") as f:
             data = json.load(f)
-            rev = data.get("alembic_version")
-            return str(rev) if rev else None
-    except (OSError, json.JSONDecodeError, UnicodeDecodeError) as e:
-        print(f"Warning: Could not read metadata JSON '{meta_path}': {e}", file=sys.stderr)
-        return None
+            expected_rev = data.get("alembic_head") or data.get("alembic_version")
+            raw_counts = data.get("tables")
+            expected_counts: dict[str, int] | None = None
+            if isinstance(raw_counts, dict):
+                expected_counts = {str(k): int(v) for k, v in raw_counts.items()}
+            expected_admin = data.get("admin_identity")
+            if not isinstance(expected_admin, dict):
+                expected_admin = None
+            return (
+                str(expected_rev) if expected_rev else None,
+                expected_counts,
+                expected_admin,
+            )
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError, ValueError) as e:
+        print(f"Warning: Could not read metadata/manifest JSON '{manifest_or_meta_path}': {e}", file=sys.stderr)
+        return (None, None, None)
 
 
 def main() -> None:
@@ -371,9 +484,11 @@ def main() -> None:
         help="Database name or connection URL of the restored database.",
     )
     parser.add_argument(
+        "--manifest",
         "--meta",
+        dest="manifest_path",
         default=None,
-        help="Path to .meta.json backup metadata file to verify Alembic revision.",
+        help="Path to .manifest.json or .meta.json backup metadata file to verify.",
     )
     parser.add_argument(
         "--no-cycle-check",
@@ -388,12 +503,18 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    expected_rev = load_expected_alembic_rev(args.meta)
+    expected_rev, expected_counts, expected_admin = load_verification_context(
+        args.manifest_path
+    )
 
     try:
         passed, report = asyncio.run(
             run_all_verifications(
-                args.db, expected_rev, check_cycle=not args.no_cycle_check
+                args.db,
+                expected_rev,
+                check_cycle=not args.no_cycle_check,
+                expected_counts=expected_counts,
+                expected_admin=expected_admin,
             )
         )
     except (asyncpg.PostgresError, OSError, RuntimeError) as e:

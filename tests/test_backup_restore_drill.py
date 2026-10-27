@@ -378,7 +378,7 @@ async def test_backup_creates_valid_artifacts_and_permissions(
     assert meta["database_name"] == src_db
     assert meta["dump_format"] == "custom"
     assert meta["size_bytes"] == dump_file.stat().st_size
-    assert meta["alembic_version"] == "b3f81e7d2c94"
+    assert meta["alembic_version"] == "g3b7e1d5a8c2"
 
     # Verify SHA-256 matches
     recorded_sha = read_text_file(sha_file).split()[0].strip()
@@ -816,7 +816,7 @@ async def test_full_drill_backup_restore_and_verification(
     assert rc_v == 0, f"Verification failed:\n{out_v}\n{err_v}"
     report: dict[str, Any] = json.loads(out_v)
     assert report["passed"] is True
-    assert report["alembic_version"] == "b3f81e7d2c94"
+    assert report["alembic_version"] == "g3b7e1d5a8c2"
     assert report["checks"]["h01_triggers"] == "PASSED"
     assert report["checks"]["h01_functional_cycle_rejection"] == "PASSED"
 

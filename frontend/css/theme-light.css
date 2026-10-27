@@ -58,8 +58,32 @@ html[data-theme="light"] .skip-link {
 
 html[data-theme="light"] .export-button,
 html[data-theme="light"] .upgrade-icon,
-html[data-theme="light"] .mobile-nav button.is-active {
+html[data-theme="light"] .mobile-nav button.is-active,
+html[data-theme="light"] .action-button.primary {
   color: #ffffff;
+}
+
+html[data-theme="light"] .status-pill.success {
+  background: rgba(46, 125, 50, 0.12);
+  color: #2e7d32;
+  border-color: rgba(46, 125, 50, 0.25);
+}
+html[data-theme="light"] .status-pill.danger {
+  background: rgba(229, 57, 53, 0.1);
+  color: #c62828;
+  border-color: rgba(229, 57, 53, 0.25);
+}
+html[data-theme="light"] .status-pill.neutral {
+  background: #eaedf1;
+  color: #586575;
+  border-color: #dce2e9;
+}
+html[data-theme="light"] .action-button:not(.primary) {
+  background: #ffffff;
+  color: #202833;
+}
+html[data-theme="light"] .action-button:not(.primary):hover {
+  background: #f2f4f7;
 }
 
 html[data-theme="light"] .brand-name span:last-child,
@@ -72,6 +96,20 @@ html[data-theme="light"] .api-status[data-state="connected"] {
 
 html[data-theme="light"] .trend.down {
   color: #B3261E;
+}
+
+html[data-theme="light"] .form-group input,
+html[data-theme="light"] .form-group select,
+html[data-theme="light"] .form-group textarea {
+  background: #ffffff;
+  color: var(--text);
+  border-color: var(--border);
+}
+html[data-theme="light"] .form-group input:focus-visible,
+html[data-theme="light"] .form-group select:focus-visible,
+html[data-theme="light"] .form-group textarea:focus-visible {
+  border-color: var(--primary);
+  background: #ffffff;
 }
 
 @media (max-width: 650px) {

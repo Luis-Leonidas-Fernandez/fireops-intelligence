@@ -14,9 +14,9 @@ window.DashboardData = {
     { label: "Extinción", inService: 214, maintenance: 32, retired: 7 },
     { label: "Protección", inService: 263, maintenance: 41, retired: 9 },
     { label: "Rescate", inService: 144, maintenance: 23, retired: 4 },
-    { label: "Comunic.", inService: 96, maintenance: 12, retired: 3 },
-    { label: "Herram.", inService: 128, maintenance: 17, retired: 5 },
-    { label: "Iluminac.", inService: 77, maintenance: 7, retired: 2 },
+    { label: "Comunicaciones", inService: 96, maintenance: 12, retired: 3 },
+    { label: "Herramientas", inService: 128, maintenance: 17, retired: 5 },
+    { label: "Iluminación", inService: 77, maintenance: 7, retired: 2 },
     { label: "Sanidad", inService: 68, maintenance: 6, retired: 1 },
     { label: "Vehículos", inService: 38, maintenance: 4, retired: 2 },
     { label: "Repuestos", inService: 59, maintenance: 1, retired: 1 }

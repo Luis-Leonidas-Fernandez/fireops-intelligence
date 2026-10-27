@@ -19,12 +19,14 @@ if config.config_file_name is not None:
 # read DATABASE_URL from .env and discover the models during autogenerate.
 from app.config.settings import get_settings
 from app.infrastructure.database.base import Base
+from app.infrastructure.database.migration_guards import validate_migration_target
 from app.infrastructure.idempotency import models as idempotency_models  # noqa: F401
 from app.infrastructure.outbox import models as outbox_models  # noqa: F401
 from app.modules.auth import models as auth_models  # noqa: F401
 from app.modules.inventory.shared import models  # noqa: F401
 
 settings = get_settings()
+validate_migration_target(settings)
 config.set_main_option("sqlalchemy.url", settings.database_url)
 
 target_metadata = Base.metadata

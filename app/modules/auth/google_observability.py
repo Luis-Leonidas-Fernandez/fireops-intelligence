@@ -16,8 +16,24 @@ SAFE_REASONS = frozenset({
     "invalid_state", "provider_denied", "missing_code", "invalid_response",
     "missing_id_token", "provider_http_error", "transport_error",
     "invalid_subject", "unverified_email", "invalid_nonce", "verification_error",
+    "token_used_too_early", "token_expired", "audience_mismatch",
+    "signing_key_not_found", "signature_invalid", "wrong_issuer",
+    "certs_transport_error", "malformed_token", "unsupported_algorithm",
+    "unknown_verification_error",
     "GOOGLE_AUTH_FAILED", "GOOGLE_LOGIN_REQUIRED", "GOOGLE_ACCOUNT_CONFLICT",
     "GOOGLE_LINK_REQUIRED", "GOOGLE_EMAIL_MISMATCH", "GOOGLE_ALREADY_LINKED",
+})
+
+SAFE_ERROR_CLASSES = frozenset({
+    "InvalidValue",
+    "MalformedError",
+    "GoogleAuthError",
+    "TransportError",
+    "DefaultCredentialsError",
+    "ValueError",
+    "TypeError",
+    "KeyError",
+    "TimeoutError",
 })
 
 
@@ -32,6 +48,7 @@ def observe_google_auth(
     attempt_id: str,
     *,
     reason: str | None = None,
+    error_class: str | None = None,
     http_status: int | None = None,
 ) -> None:
     """Emit only allowlisted metadata; never include provider/user payloads."""
@@ -46,6 +63,10 @@ def observe_google_auth(
     }
     if reason is not None:
         event["reason"] = reason if reason in SAFE_REASONS else "unspecified"
+    if error_class is not None:
+        event["error_class"] = (
+            error_class if error_class in SAFE_ERROR_CLASSES else "UnknownError"
+        )
     if http_status is not None and 100 <= http_status <= 599:
         event["http_status"] = http_status
     logger.log(

@@ -55,6 +55,9 @@
         <button class="nav-item" type="button" data-view="Movimientos">
           <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h15"/><path d="m15 3 4 4-4 4"/><path d="M20 17H5"/><path d="m9 13-4 4 4 4"/></svg></span><span>Movimientos</span>
         </button>
+        <button class="nav-item" type="button" data-view="Invitaciones">
+          <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><polyline points="3,7 12,13 21,7"/></svg></span><span>Invitaciones</span>
+        </button>
         <button class="nav-item" type="button" data-view="Auditoría">
           <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5h6"/><path d="M9 3h6v4H9z"/><path d="M7 5H5v16h14V5h-2"/><path d="m8 14 2.5 2.5L16 11"/></svg></span><span>Auditoría</span>
         </button>
@@ -105,6 +108,9 @@
       <nav class="mobile-nav" id="mobile-nav" aria-label="Navegación móvil" hidden>
         <button class="is-active" type="button" data-view="Inventario general">Inventario general</button>
         <button type="button" data-view="Bienes">Bienes</button>
+        <button type="button" data-view="Categorías">Categorías</button>
+        <button type="button" data-view="Ubicaciones">Ubicaciones</button>
+        <button type="button" data-view="Invitaciones">Invitaciones</button>
         <button type="button" data-view="Movimientos">Movimientos</button>
         <button type="button" data-view="Alertas">Alertas</button>
       </nav>
@@ -116,7 +122,7 @@
             <h1 id="page-title">Inventario general</h1>
             <p id="page-subtitle">Vista operativa de bienes, estados y movimientos del inventario.</p>
           </div>
-          <div class="heading-actions">
+          <div class="heading-actions" id="dashboard-heading-actions">
             <label class="date-control">
               <span aria-hidden="true">□</span>
               <span class="sr-only">Período de referencia</span>
@@ -130,74 +136,623 @@
           </div>
         </section>
 
-        <section class="kpi-grid" id="kpi-grid" aria-label="Indicadores de inventario con datos de demostración"></section>
+        <!-- VISTA: INVENTARIO GENERAL (DASHBOARD) -->
+        <div id="view-inventario-general" class="view-content" data-view="Inventario general">
+          <section class="kpi-grid" id="kpi-grid" aria-label="Indicadores de inventario con datos de demostración"></section>
 
-        <section class="dashboard-grid" aria-label="Detalle del inventario">
-          <article class="panel analytics-panel">
+          <section class="dashboard-grid" aria-label="Detalle del inventario">
+            <article class="panel analytics-panel">
+              <header class="panel-header">
+                <div><p class="panel-kicker">Datos de demostración</p><h2>Bienes por categoría</h2></div>
+                <div class="legend" aria-label="Referencias del gráfico">
+                  <span><i class="primary"></i>En servicio</span><span><i class="orange"></i>En mantenimiento</span><span><i class="yellow"></i>Bajas</span>
+                </div>
+              </header>
+              <div class="chart-summary" id="chart-summary"></div>
+              <div class="bar-chart-wrap">
+                <div class="chart-y-axis" aria-hidden="true"><span>320</span><span>200</span><span>100</span><span>0</span></div>
+                <div class="bar-chart" id="bar-chart" role="img" aria-label="Gráfico apilado de bienes por categoría con datos de demostración"></div>
+              </div>
+            </article>
+
+            <article class="panel channels-panel">
+              <header class="panel-header"><div><p class="panel-kicker">Datos de demostración</p><h2>Estado del inventario</h2></div><button class="more-button" aria-label="Más opciones de estado" type="button">•••</button></header>
+              <div class="channel-totals" id="channel-totals"></div>
+              <div class="signal-strip" id="signal-strip" aria-hidden="true"></div>
+              <div class="channel-list-header" aria-hidden="true"><span>Estado</span><span>Proporción</span><span>Total</span></div>
+              <ul class="channel-list" id="channel-list"></ul>
+            </article>
+
+            <article class="panel countries-panel">
+              <header class="panel-header panel-header-search">
+                <div><p class="panel-kicker">Datos de demostración</p><h2>Movimientos recientes</h2></div>
+                <label class="table-search"><span aria-hidden="true">⌕</span><span class="sr-only">Filtrar movimientos</span><input id="country-search" type="search" placeholder="Filtrar"></label>
+              </header>
+              <div class="table-tabs" role="tablist" aria-label="Filtro de activos">
+                <button class="is-active" type="button" role="tab" aria-selected="true" data-filter="all">Todos</button>
+                <button type="button" role="tab" aria-selected="false" data-filter="assigned">Asignados</button>
+                <button type="button" role="tab" aria-selected="false" data-filter="storage">En depósito</button>
+              </div>
+              <div class="table-scroll">
+                <table>
+                  <thead><tr><th scope="col">Bien y Código</th><th scope="col">Categoría</th><th scope="col">Ubicación</th><th scope="col">Estado</th></tr></thead>
+                  <tbody id="country-table-body"></tbody>
+                </table>
+              </div>
+              <div class="table-pagination" id="country-table-pagination" aria-label="Paginación de activos">
+                <span class="pagination-info" id="assets-pagination-info">Mostrando 0 de 0</span>
+                <div class="pagination-actions">
+                  <button type="button" class="pagination-btn" id="btn-prev-assets" disabled aria-label="Ver 6 anteriores">← Anterior</button>
+                  <button type="button" class="pagination-btn" id="btn-next-assets" disabled aria-label="Ver siguientes 6">Siguiente →</button>
+                </div>
+              </div>
+            </article>
+
+            <article class="panel map-panel">
+              <header class="panel-header"><div><p class="panel-kicker">Datos de demostración</p><h2>Alertas <span class="count-badge">7</span></h2></div><button class="more-button" aria-label="Más opciones de alertas" type="button">•••</button></header>
+              <div class="map-stage" role="img" aria-label="Resumen visual ilustrativo de alertas por ubicación operativa">
+                <svg viewBox="0 0 800 360" aria-hidden="true" focusable="false">
+                  <defs><linearGradient id="mapGradient" x1="0" x2="1"><stop stop-color="#f48220"/><stop offset=".42" stop-color="#E53935"/><stop offset="1" stop-color="#C62828"/></linearGradient></defs>
+                  <g class="map-grid"><path d="M0 90H800M0 180H800M0 270H800M200 0V360M400 0V360M600 0V360"/></g>
+                  <g fill="url(#mapGradient)">
+                    <path d="M74 82l38-29 74-6 48 18 34 35-16 30-46 9-18 27-38-11-25-32-42-10z"/>
+                    <path d="M203 166l44 19 26 47-10 58-25 40-25-21 4-42-25-37-8-39z"/>
+                    <path d="M342 75l32-19 37 8 19 20 36-4 27 18-12 17-39 7-11 18-31-2-13-22-38-13z"/>
+                    <path d="M392 141l48 4 28 35-9 55-26 65-31-17-9-50-27-47z"/>
+                    <path d="M475 93l48-34 69 10 53 24 79 4 29 30-31 19-53-9-32 22-58-6-29-22-51 12-26-23z"/>
+                    <path d="M653 230l47-20 49 13 19 35-29 25-55-5-31-25z"/>
+                  </g>
+                  <g class="map-points"><circle cx="146" cy="102" r="5"/><circle cx="231" cy="218" r="5"/><circle cx="401" cy="104" r="5"/><circle cx="575" cy="116" r="5"/><circle cx="705" cy="247" r="5"/></g>
+                </svg>
+                <div class="map-callout"><span></span><div><small>Alerta prioritaria</small><strong>Revisión próxima · 7 bienes</strong></div></div>
+              </div>
+            </article>
+          </section>
+          <p class="data-note">Datos de demostración · Registros ilustrativos · Sin estadísticas reales del backend</p>
+        </div>
+
+        <!-- VISTA: BIENES -->
+        <section id="view-bienes" class="view-content" data-view="Bienes" hidden aria-label="Gestión de bienes">
+          <article class="panel">
             <header class="panel-header">
-              <div><p class="panel-kicker">Datos de demostración</p><h2>Bienes por categoría</h2></div>
-              <div class="legend" aria-label="Referencias del gráfico">
-                <span><i class="primary"></i>En servicio</span><span><i class="orange"></i>En mantenimiento</span><span><i class="yellow"></i>Bajas</span>
+              <div>
+                <p class="panel-kicker">Gestión de Activos</p>
+                <h2>Parque de Bienes y Materiales</h2>
+              </div>
+              <div class="panel-toolbar">
+                <label class="table-search view-search">
+                  <span aria-hidden="true">⌕</span>
+                  <span class="sr-only">Buscar en bienes</span>
+                  <input type="search" id="bienes-search-input" placeholder="Buscar bien por código o descripción…" aria-label="Buscar bien">
+                </label>
+                <button type="button" class="action-button primary" id="btn-nuevo-bien" data-view="Nuevo bien"><span aria-hidden="true">+</span> Nuevo bien</button>
               </div>
             </header>
-            <div class="chart-summary" id="chart-summary"></div>
-            <div class="bar-chart-wrap">
-              <div class="chart-y-axis" aria-hidden="true"><span>320</span><span>200</span><span>100</span><span>0</span></div>
-              <div class="bar-chart" id="bar-chart" role="img" aria-label="Gráfico apilado de bienes por categoría con datos de demostración"></div>
-            </div>
-          </article>
-
-          <article class="panel channels-panel">
-            <header class="panel-header"><div><p class="panel-kicker">Datos de demostración</p><h2>Estado del inventario</h2></div><button class="more-button" aria-label="Más opciones de estado" type="button">•••</button></header>
-            <div class="channel-totals" id="channel-totals"></div>
-            <div class="signal-strip" id="signal-strip" aria-hidden="true"></div>
-            <div class="channel-list-header" aria-hidden="true"><span>Estado</span><span>Proporción</span><span>Total</span></div>
-            <ul class="channel-list" id="channel-list"></ul>
-          </article>
-
-          <article class="panel countries-panel">
-            <header class="panel-header panel-header-search">
-              <div><p class="panel-kicker">Datos de demostración</p><h2>Movimientos recientes</h2></div>
-              <label class="table-search"><span aria-hidden="true">⌕</span><span class="sr-only">Filtrar movimientos</span><input id="country-search" type="search" placeholder="Filtrar"></label>
-            </header>
-            <div class="table-tabs" role="tablist" aria-label="Tipo de movimiento">
-              <button class="is-active" type="button" role="tab" aria-selected="true">Todos</button>
-              <button type="button" role="tab" aria-selected="false">Ingresos</button>
-              <button type="button" role="tab" aria-selected="false">Salidas</button>
+            <div class="table-tabs" role="tablist" aria-label="Filtrar por estado del bien">
+              <button class="is-active" type="button" role="tab" aria-selected="true" data-filter="all">Todos <span class="count-badge" id="bienes-count-all">0</span></button>
+              <button type="button" role="tab" aria-selected="false" data-filter="servicio">En servicio <span class="count-badge" id="bienes-count-servicio">0</span></button>
+              <button type="button" role="tab" aria-selected="false" data-filter="deposito">En depósito <span class="count-badge" id="bienes-count-deposito">0</span></button>
             </div>
             <div class="table-scroll">
               <table>
-                <thead><tr><th scope="col">Bien</th><th scope="col">Movimiento</th><th scope="col">Cantidad</th><th scope="col"><span class="sr-only">Actividad reciente</span></th></tr></thead>
-                <tbody id="country-table-body"></tbody>
+                <thead>
+                  <tr>
+                    <th scope="col">Código</th>
+                    <th scope="col">Denominación / Bien</th>
+                    <th scope="col">Categoría</th>
+                    <th scope="col">Ubicación / Móvil</th>
+                    <th scope="col">Estado</th>
+                    <th scope="col"><span class="sr-only">Acciones</span></th>
+                  </tr>
+                </thead>
+                <tbody id="bienes-table-body">
+                  <tr>
+                    <td colspan="6" style="text-align:center; padding: 20px; color: var(--text-soft);">Cargando bienes del inventario…</td>
+                  </tr>
+                </tbody>
               </table>
             </div>
           </article>
+        </section>
 
-          <article class="panel map-panel">
-            <header class="panel-header"><div><p class="panel-kicker">Datos de demostración</p><h2>Alertas <span class="count-badge">7</span></h2></div><button class="more-button" aria-label="Más opciones de alertas" type="button">•••</button></header>
-            <div class="map-stage" role="img" aria-label="Resumen visual ilustrativo de alertas por ubicación operativa">
-              <svg viewBox="0 0 800 360" aria-hidden="true" focusable="false">
-                <defs><linearGradient id="mapGradient" x1="0" x2="1"><stop stop-color="#f48220"/><stop offset=".42" stop-color="#E53935"/><stop offset="1" stop-color="#C62828"/></linearGradient></defs>
-                <g class="map-grid"><path d="M0 90H800M0 180H800M0 270H800M200 0V360M400 0V360M600 0V360"/></g>
-                <g fill="url(#mapGradient)">
-                  <path d="M74 82l38-29 74-6 48 18 34 35-16 30-46 9-18 27-38-11-25-32-42-10z"/>
-                  <path d="M203 166l44 19 26 47-10 58-25 40-25-21 4-42-25-37-8-39z"/>
-                  <path d="M342 75l32-19 37 8 19 20 36-4 27 18-12 17-39 7-11 18-31-2-13-22-38-13z"/>
-                  <path d="M392 141l48 4 28 35-9 55-26 65-31-17-9-50-27-47z"/>
-                  <path d="M475 93l48-34 69 10 53 24 79 4 29 30-31 19-53-9-32 22-58-6-29-22-51 12-26-23z"/>
-                  <path d="M653 230l47-20 49 13 19 35-29 25-55-5-31-25z"/>
-                </g>
-                <g class="map-points"><circle cx="146" cy="102" r="5"/><circle cx="231" cy="218" r="5"/><circle cx="401" cy="104" r="5"/><circle cx="575" cy="116" r="5"/><circle cx="705" cy="247" r="5"/></g>
-              </svg>
-              <div class="map-callout"><span></span><div><small>Alerta prioritaria</small><strong>Revisión próxima · 7 bienes</strong></div></div>
+        <!-- VISTA: NUEVO BIEN (ALTA DE ACTIVO) -->
+        <section id="view-nuevo-bien" class="view-content" data-view="Nuevo bien" hidden aria-label="Registrar nuevo bien">
+          <article class="panel">
+            <header class="panel-header">
+              <div>
+                <p class="panel-kicker">Gestión de Activos</p>
+                <h2>Registrar Nuevo Bien</h2>
+              </div>
+              <div class="panel-toolbar">
+                <button type="button" class="action-button" id="btn-cancelar-crear-bien" data-view-target="Bienes">
+                  <span aria-hidden="true">←</span> Volver a Bienes
+                </button>
+              </div>
+            </header>
+
+            <form id="form-crear-bien" class="entity-form" novalidate>
+              <div class="form-grid">
+                <div class="form-group">
+                  <label for="asset-code">Código interno <span class="required" aria-hidden="true">*</span></label>
+                  <input type="text" id="asset-code" name="internal_code" placeholder="Ej: BIE-00107" required autocomplete="off" spellcheck="false" maxlength="30">
+                  <p class="field-hint">Identificador único del bien (mínimo 3 caracteres).</p>
+                </div>
+
+                <div class="form-group">
+                  <label for="asset-name">Denominación / Nombre <span class="required" aria-hidden="true">*</span></label>
+                  <input type="text" id="asset-name" name="name" placeholder="Ej: Motobomba portátil alta presión" required autocomplete="off" maxlength="150">
+                  <p class="field-hint">Nombre descriptivo o modelo del equipo.</p>
+                </div>
+
+                <div class="form-group form-group-full" id="group-category-container">
+                  <div class="label-with-action">
+                    <label>Categoría del bien <span class="required" aria-hidden="true">*</span></label>
+                    <span class="field-hint" style="margin:0;">Seleccione existente o cree una nueva</span>
+                  </div>
+
+                  <div class="category-mode-selector" role="tablist" aria-label="Modo de asignación de categoría">
+                    <button type="button" class="cat-mode-btn is-active" id="btn-mode-existing" role="tab" aria-selected="true">
+                      <span aria-hidden="true">▾</span> Elegir de la lista
+                    </button>
+                    <button type="button" class="cat-mode-btn" id="btn-mode-new" role="tab" aria-selected="false">
+                      <span aria-hidden="true">+</span> Escribir nueva categoría
+                    </button>
+                  </div>
+
+                  <div id="group-select-category" class="category-panel">
+                    <select id="asset-category" name="category_id">
+                      <option value="" disabled selected>Seleccione una categoría…</option>
+                      <option value="1">Herramientas de corte</option>
+                      <option value="2">Protección Personal (EPP)</option>
+                      <option value="3">Equipos de energía</option>
+                      <option value="4">Material hídrico</option>
+                      <option value="5">Detección y óptica</option>
+                      <option value="6">Rescate en altura</option>
+                      <option value="__NEW__" class="opt-new-category">+ Crear nueva categoría…</option>
+                    </select>
+                    <p class="field-hint">Clasificación operativa según el inventario actual.</p>
+                  </div>
+
+                  <div id="group-new-category" class="category-panel" hidden style="display:none;">
+                    <div class="label-with-action" style="margin-bottom: 4px;">
+                      <label for="asset-new-category" style="font-size: 0.72rem; color: var(--text-soft);">Nombre de la nueva categoría <span class="required" aria-hidden="true">*</span></label>
+                      <button type="button" class="link-button" id="btn-cancel-new-cat">Volver a categorías existentes</button>
+                    </div>
+                    <input type="text" id="asset-new-category" name="new_category_name" placeholder="Ej: Material de iluminación subacuática" autocomplete="off" maxlength="100">
+                    <p class="field-hint">Esta categoría se creará automáticamente en la base de datos y se vinculará a este nuevo bien en el mismo acto.</p>
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label for="asset-location">Ubicación / Asignación</label>
+                  <select id="asset-location" name="location_id">
+                    <option value="" selected>Sin asignación fija (Depósito)</option>
+                    <option value="1">Móvil B-12 (Autobomba)</option>
+                    <option value="2">Móvil R-04 (Rescate)</option>
+                    <option value="3">Cuartel Central - Sala EPP</option>
+                    <option value="4">Cuartel Central - Sala Técnica</option>
+                    <option value="5">Depósito Central</option>
+                  </select>
+                  <p class="field-hint">Ubicación inicial física o vehículo de guardia.</p>
+                </div>
+
+                <div class="form-group form-group-full">
+                  <label for="asset-serial">Número de serie / Observaciones</label>
+                  <textarea id="asset-serial" name="serial_details" placeholder="Ej: N/S: ST-998241 · Fabricante: Stihl · Motor 2T. Ingreso con kit de herramientas y manual operativo." rows="3" maxlength="300"></textarea>
+                  <p class="field-hint">Detalles técnicos adicionales, número de serie o especificaciones.</p>
+                </div>
+              </div>
+
+              <div class="form-actions-bar">
+                <button type="button" class="action-button" data-view-target="Bienes">Cancelar</button>
+                <button type="submit" class="action-button primary" id="btn-submit-bien">
+                  <span aria-hidden="true">✓</span> Registrar bien
+                </button>
+              </div>
+            </form>
+          </article>
+        </section>
+
+        <!-- VISTA: CATEGORÍAS -->
+        <section id="view-categorias" class="view-content" data-view="Categorías" hidden aria-label="Gestión de categorías">
+          <article class="panel">
+            <header class="panel-header">
+              <div>
+                <p class="panel-kicker">Catálogo del Sistema</p>
+                <h2>Categorías de Inventario</h2>
+              </div>
+              <div class="panel-toolbar">
+                <label class="table-search view-search">
+                  <span aria-hidden="true">⌕</span>
+                  <span class="sr-only">Buscar en categorías</span>
+                  <input type="search" id="categorias-search-input" placeholder="Buscar categoría…" aria-label="Buscar categoría">
+                </label>
+                <button type="button" class="action-button primary" id="btn-nueva-categoria" data-view="Nueva categoría"><span aria-hidden="true">+</span> Nueva categoría</button>
+              </div>
+            </header>
+            <div class="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th scope="col">Código</th>
+                    <th scope="col">Categoría</th>
+                    <th scope="col">Descripción operativa</th>
+                    <th scope="col">Total de bienes</th>
+                    <th scope="col">Estado</th>
+                    <th scope="col"><span class="sr-only">Acciones</span></th>
+                  </tr>
+                </thead>
+                <tbody id="categorias-table-body">
+                  <tr>
+                    <td colspan="6" style="text-align:center; padding: 20px; color: var(--text-soft);">Cargando categorías del inventario…</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </article>
         </section>
-        <p class="data-note">Datos de demostración · Registros ilustrativos · Sin estadísticas reales del backend</p>
+
+        <!-- VISTA: NUEVA CATEGORÍA (ALTA DE CATEGORÍA) -->
+        <section id="view-nueva-categoria" class="view-content" data-view="Nueva categoría" hidden aria-label="Registrar nueva categoría">
+          <article class="panel">
+            <header class="panel-header">
+              <div>
+                <p class="panel-kicker">Catálogo del Sistema</p>
+                <h2>Registrar Nueva Categoría</h2>
+              </div>
+              <div class="panel-toolbar">
+                <button type="button" class="action-button" id="btn-cancelar-crear-categoria" data-view-target="Categorías">
+                  <span aria-hidden="true">←</span> Volver a Categorías
+                </button>
+              </div>
+            </header>
+
+            <form id="form-crear-categoria" class="entity-form" novalidate>
+              <div class="form-grid">
+                <div class="form-group">
+                  <label for="category-code">Código sugerido</label>
+                  <input type="text" id="category-code" name="code" placeholder="Ej: CAT-07" autocomplete="off" spellcheck="false" maxlength="20">
+                  <p class="field-hint">Código de referencia operativa para rotulación y catálogo.</p>
+                </div>
+
+                <div class="form-group">
+                  <label for="category-name">Nombre de categoría <span class="required" aria-hidden="true">*</span></label>
+                  <input type="text" id="category-name" name="name" placeholder="Ej: Equipos de Iluminación y Balizamiento" required autocomplete="off" maxlength="100">
+                  <p class="field-hint">Denominación oficial de la clasificación (3 a 100 caracteres).</p>
+                </div>
+
+                <div class="form-group form-group-full">
+                  <label for="category-description">Descripción operativa</label>
+                  <textarea id="category-description" name="description" placeholder="Ej: Reflectores portátiles, trípodes LED, generadores de balizamiento perimetral y linternas intrínsecamente seguras." rows="3" maxlength="250"></textarea>
+                  <p class="field-hint">Detalle del tipo de bienes, herramientas o materiales que agrupa.</p>
+                </div>
+              </div>
+
+              <div class="form-actions-bar">
+                <button type="button" class="action-button" data-view-target="Categorías">Cancelar</button>
+                <button type="submit" class="action-button primary" id="btn-submit-categoria">
+                  <span aria-hidden="true">✓</span> Registrar categoría
+                </button>
+              </div>
+            </form>
+          </article>
+        </section>
+
+        <!-- VISTA: UBICACIONES -->
+        <section id="view-ubicaciones" class="view-content" data-view="Ubicaciones" hidden aria-label="Gestión de ubicaciones">
+          <article class="panel">
+            <header class="panel-header">
+              <div>
+                <p class="panel-kicker">Despliegue Operativo</p>
+                <h2>Ubicaciones y Destinos</h2>
+              </div>
+              <div class="panel-toolbar">
+                <label class="table-search view-search">
+                  <span aria-hidden="true">⌕</span>
+                  <span class="sr-only">Buscar en ubicaciones</span>
+                  <input type="search" placeholder="Buscar ubicación…" aria-label="Buscar ubicación">
+                </label>
+                <button type="button" class="action-button primary"><span aria-hidden="true">+</span> Nueva ubicación</button>
+              </div>
+            </header>
+            <div class="table-tabs" role="tablist" aria-label="Filtrar por tipo de destino">
+              <button class="is-active" type="button" role="tab" aria-selected="true" data-filter="all">Todas <span class="count-badge">5</span></button>
+              <button type="button" role="tab" aria-selected="false" data-filter="base">Bases operativas <span class="count-badge">2</span></button>
+              <button type="button" role="tab" aria-selected="false" data-filter="movil">Móviles / Vehículos <span class="count-badge">2</span></button>
+              <button type="button" role="tab" aria-selected="false" data-filter="almacen">Almacenes <span class="count-badge">1</span></button>
+            </div>
+            <div class="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th scope="col">Código</th>
+                    <th scope="col">Nombre de la Ubicación</th>
+                    <th scope="col">Tipo</th>
+                    <th scope="col">Responsable a cargo</th>
+                    <th scope="col">Bienes asignados</th>
+                    <th scope="col"><span class="sr-only">Acciones</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr data-type="base">
+                    <td class="table-code">UBI-CC-01</td>
+                    <td><strong>Cuartel Central — Sala de Máquinas</strong> <br><small class="table-muted">Hangar principal · Av. San Martín 450</small></td>
+                    <td><span class="status-pill neutral">Base operativa</span></td>
+                    <td>Comandante Mayor Pérez</td>
+                    <td><strong>165</strong></td>
+                    <td><div class="table-actions"><button class="action-button-sm" type="button">Ver bienes</button></div></td>
+                  </tr>
+                  <tr data-type="movil">
+                    <td class="table-code">UBI-MOV-12</td>
+                    <td><strong>Autobomba Urbana B-12</strong> <br><small class="table-muted">Mercedes-Benz Atego 1726 · Patente AF-321-FC</small></td>
+                    <td><span class="status-pill neutral">Móvil / Vehículo</span></td>
+                    <td>Suboficial Principal Gómez</td>
+                    <td><strong>48</strong></td>
+                    <td><div class="table-actions"><button class="action-button-sm" type="button">Ver bienes</button></div></td>
+                  </tr>
+                  <tr data-type="movil">
+                    <td class="table-code">UBI-MOV-04</td>
+                    <td><strong>Unidad de Rescate R-04</strong> <br><small class="table-muted">Ford Ranger 4x4 · Patente AG-892-FC</small></td>
+                    <td><span class="status-pill neutral">Móvil / Vehículo</span></td>
+                    <td>Oficial Inspector Morales</td>
+                    <td><strong>34</strong></td>
+                    <td><div class="table-actions"><button class="action-button-sm" type="button">Ver bienes</button></div></td>
+                  </tr>
+                  <tr data-type="almacen">
+                    <td class="table-code">UBI-DEP-01</td>
+                    <td><strong>Depósito Central de Suministros</strong> <br><small class="table-muted">Pañol general de repuestos y reserva</small></td>
+                    <td><span class="status-pill neutral">Almacén</span></td>
+                    <td>Suboficial Auxiliar Romero</td>
+                    <td><strong>92</strong></td>
+                    <td><div class="table-actions"><button class="action-button-sm" type="button">Ver bienes</button></div></td>
+                  </tr>
+                  <tr data-type="base">
+                    <td class="table-code">UBI-DEST-02</td>
+                    <td><strong>Destacamento Norte — Cochera</strong> <br><small class="table-muted">Subdelegación barrio norte</small></td>
+                    <td><span class="status-pill neutral">Base operativa</span></td>
+                    <td>Oficial Ayudante Castro</td>
+                    <td><strong>27</strong></td>
+                    <td><div class="table-actions"><button class="action-button-sm" type="button">Ver bienes</button></div></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </article>
+        </section>
+
+        <!-- VISTA: INVITACIONES -->
+        <section id="view-invitaciones" class="view-content" data-view="Invitaciones" hidden aria-label="Gestión de invitaciones">
+          <article class="panel">
+            <header class="panel-header">
+              <div>
+                <p class="panel-kicker">Acceso y Seguridad</p>
+                <h2>Invitaciones y Altas de Personal</h2>
+              </div>
+              <div class="panel-toolbar">
+                <label class="table-search view-search">
+                  <span aria-hidden="true">⌕</span>
+                  <span class="sr-only">Buscar invitaciones</span>
+                  <input type="search" placeholder="Buscar por correo o rol…" aria-label="Buscar invitaciones">
+                </label>
+                <button type="button" class="action-button primary"><span aria-hidden="true">+</span> Nueva invitación</button>
+              </div>
+            </header>
+            <div class="table-tabs" role="tablist" aria-label="Filtrar por estado de la invitación">
+              <button class="is-active" type="button" role="tab" aria-selected="true" data-filter="all">Todas <span class="count-badge">4</span></button>
+              <button type="button" role="tab" aria-selected="false" data-filter="pending">Pendientes <span class="count-badge">2</span></button>
+              <button type="button" role="tab" aria-selected="false" data-filter="accepted">Aceptadas <span class="count-badge">1</span></button>
+              <button type="button" role="tab" aria-selected="false" data-filter="expired">Expiradas <span class="count-badge">1</span></button>
+            </div>
+            <div class="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th scope="col">Destinatario</th>
+                    <th scope="col">Rol Asignado</th>
+                    <th scope="col">Fecha de Envío</th>
+                    <th scope="col">Vencimiento</th>
+                    <th scope="col">Estado</th>
+                    <th scope="col"><span class="sr-only">Acciones</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr data-status="pending">
+                    <td><strong>j.martinez@bomberos.gob.ar</strong></td>
+                    <td><span class="badge-role">BOMBERO</span></td>
+                    <td class="table-muted">26/10/2026 10:15</td>
+                    <td class="table-muted">28/10/2026 (en 42h)</td>
+                    <td><span class="status-pill warning">Pendiente</span></td>
+                    <td>
+                      <div class="table-actions">
+                        <button class="action-button-sm" type="button">Reemitir</button>
+                        <button class="action-button-sm danger" type="button">Revocar</button>
+                      </div>
+                    </td>
+                  </tr>
+                  <tr data-status="pending">
+                    <td><strong>r.sosa@bomberos.gob.ar</strong></td>
+                    <td><span class="badge-role">SUPERVISOR</span></td>
+                    <td class="table-muted">26/10/2026 09:30</td>
+                    <td class="table-muted">28/10/2026 (en 41h)</td>
+                    <td><span class="status-pill warning">Pendiente</span></td>
+                    <td>
+                      <div class="table-actions">
+                        <button class="action-button-sm" type="button">Reemitir</button>
+                        <button class="action-button-sm danger" type="button">Revocar</button>
+                      </div>
+                    </td>
+                  </tr>
+                  <tr data-status="accepted">
+                    <td><strong>m.alvarez@bomberos.gob.ar</strong></td>
+                    <td><span class="badge-role">BOMBERO</span></td>
+                    <td class="table-muted">25/10/2026 14:00</td>
+                    <td class="table-muted">27/10/2026</td>
+                    <td><span class="status-pill success">Aceptada</span></td>
+                    <td>
+                      <small class="table-muted">Registrado</small>
+                    </td>
+                  </tr>
+                  <tr data-status="expired">
+                    <td><strong>d.fernandez@bomberos.gob.ar</strong></td>
+                    <td><span class="badge-role">BOMBERO</span></td>
+                    <td class="table-muted">20/10/2026 08:00</td>
+                    <td class="table-muted">22/10/2026</td>
+                    <td><span class="status-pill danger">Expirada</span></td>
+                    <td>
+                      <div class="table-actions">
+                        <button class="action-button-sm" type="button">Reemitir</button>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </article>
+        </section>
+
+        <!-- VISTA: MOVIMIENTOS -->
+        <section id="view-movimientos" class="view-content" data-view="Movimientos" hidden aria-label="Historial de movimientos">
+          <article class="panel">
+            <header class="panel-header">
+              <div>
+                <p class="panel-kicker">Trazabilidad y Auditoría</p>
+                <h2>Historial de Movimientos</h2>
+              </div>
+              <div class="panel-toolbar">
+                <label class="table-search view-search">
+                  <span aria-hidden="true">⌕</span>
+                  <input type="search" id="movimientos-search-input" placeholder="Buscar por bien, código, origen o destino…" aria-label="Buscar movimientos">
+                </label>
+              </div>
+            </header>
+            <div class="table-tabs" role="tablist" aria-label="Filtrar por tipo de movimiento">
+              <button class="is-active" type="button" role="tab" aria-selected="true" data-filter="all">Todos <span class="count-badge" id="movimientos-count-all">0</span></button>
+              <button type="button" role="tab" aria-selected="false" data-filter="TRASLADO">Traslados <span class="count-badge" id="movimientos-count-traslados">0</span></button>
+              <button type="button" role="tab" aria-selected="false" data-filter="ALTA">Altas <span class="count-badge" id="movimientos-count-altas">0</span></button>
+              <button type="button" role="tab" aria-selected="false" data-filter="BAJA">Bajas <span class="count-badge" id="movimientos-count-bajas">0</span></button>
+            </div>
+            <div class="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th scope="col">Fecha / Hora</th>
+                    <th scope="col">Bien y Código</th>
+                    <th scope="col">Tipo</th>
+                    <th scope="col">Origen</th>
+                    <th scope="col">Destino</th>
+                    <th scope="col">Operador</th>
+                    <th scope="col">Motivo y Observaciones</th>
+                  </tr>
+                </thead>
+                <tbody id="movimientos-table-body">
+                  <tr>
+                    <td colspan="7" style="text-align:center; padding: 20px; color: var(--text-soft);">Cargando historial de movimientos…</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </article>
+        </section>
+
+        <!-- VISTA GENÉRICA / PLACEHOLDER PARA OTRAS RUTAS -->
+        <section id="view-generic" class="view-content" data-view="placeholder" hidden aria-label="Sección en preparación">
+          <article class="panel">
+            <header class="panel-header">
+              <div>
+                <p class="panel-kicker">Módulo en Preparación</p>
+                <h2>Sección Operativa</h2>
+              </div>
+            </header>
+            <div class="empty-state">
+              <div class="empty-state-icon" aria-hidden="true">📋</div>
+              <p>Esta sección está registrada en la navegación y preparada para recibir su panel operativo y contratos de datos.</p>
+            </div>
+          </article>
+        </section>
         <p class="api-status" id="api-status" role="status" aria-live="polite">Fire Control API · Verificando categorías en vivo…</p>
       </main>
     </div>
   </div>
+
+  <!-- MODAL: MOVER BIEN DE LUGAR -->
+  <dialog id="modal-mover-bien" class="modal-dialog" aria-labelledby="modal-mover-title" aria-modal="true">
+    <div class="modal-dialog-content">
+      <header class="modal-dialog-header">
+        <div>
+          <p class="panel-kicker">Reasignación operativa</p>
+          <h2 id="modal-mover-title">Mover bien de ubicación</h2>
+        </div>
+        <button type="button" class="modal-dialog-close" id="btn-cerrar-modal-mover" aria-label="Cerrar ventana de traslado">✕</button>
+      </header>
+
+      <div class="modal-asset-summary">
+        <span class="flag" aria-hidden="true">•</span>
+        <div>
+          <strong id="mover-bien-nombre">Bien</strong>
+          <span class="table-code" id="mover-bien-codigo">CÓDIGO</span>
+        </div>
+      </div>
+
+      <form id="form-mover-bien" novalidate>
+        <input type="hidden" id="mover-asset-id" name="asset_id" value="">
+
+        <div class="form-group" style="margin-bottom: 14px;">
+          <label>Lugar actual</label>
+          <div class="readonly-location-box" id="mover-origen-display">Depósito Central</div>
+        </div>
+
+        <div class="form-group form-group-full" id="group-destino-container">
+          <div class="label-with-action">
+            <label>Destino <span class="required" aria-hidden="true">*</span></label>
+            <span class="field-hint" style="margin:0;">Seleccione existente o cree uno nuevo</span>
+          </div>
+
+          <div class="category-mode-selector" role="tablist" aria-label="Modo de destino">
+            <button type="button" class="cat-mode-btn is-active" id="btn-dest-mode-existing" role="tab" aria-selected="true">
+              <span aria-hidden="true">▾</span> Elegir de la lista
+            </button>
+            <button type="button" class="cat-mode-btn" id="btn-dest-mode-new" role="tab" aria-selected="false">
+              <span aria-hidden="true">+</span> Crear nueva ubicación
+            </button>
+          </div>
+
+          <div id="panel-select-destino" class="category-panel">
+            <select id="mover-destino-select" name="destination_location_id" required>
+              <option value="" disabled selected>Seleccione el destino…</option>
+            </select>
+            <p class="field-hint">Ubicaciones y móviles operativos registrados.</p>
+          </div>
+
+          <div id="panel-new-destino" class="category-panel" hidden style="display:none;">
+            <div class="label-with-action" style="margin-bottom: 4px;">
+              <label for="mover-nuevo-destino-nombre" style="font-size: 0.72rem; color: var(--text-soft);">Nombre de la nueva ubicación <span class="required" aria-hidden="true">*</span></label>
+              <button type="button" class="link-button" id="btn-cancel-new-destino">Volver a lista existente</button>
+            </div>
+            <input type="text" id="mover-nuevo-destino-nombre" name="new_location_name" placeholder="Ej: Móvil R-05 (Rescate Rápido)" autocomplete="off" maxlength="100">
+            <p class="field-hint">Esta ubicación se creará en el catálogo y el bien se moverá allí en el mismo acto.</p>
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-top: 14px;">
+          <label for="mover-motivo">Motivo del traslado</label>
+          <input type="text" id="mover-motivo" name="reason" placeholder="Ej: Reasignación por salida operativa de guardia" autocomplete="off" maxlength="200">
+        </div>
+
+        <div class="form-group" style="margin-top: 14px;">
+          <label for="mover-observaciones">Observaciones adicionales</label>
+          <textarea id="mover-observaciones" name="observations" placeholder="Ej: Guardado en cajonera izquierda con accesorios completos." rows="2" maxlength="300"></textarea>
+        </div>
+
+        <div class="modal-dialog-actions" style="margin-top: 20px; display: flex; justify-content: flex-end; gap: 10px;">
+          <button type="button" class="action-button" id="btn-cancelar-mover">Cancelar</button>
+          <button type="submit" class="action-button primary" id="btn-confirmar-traslado">
+            <span aria-hidden="true">✓</span> Confirmar traslado
+          </button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <div id="accessible-polite-announcer" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
   <div id="accessible-assertive-announcer" class="sr-only" role="alert" aria-live="assertive" aria-atomic="true"></div>

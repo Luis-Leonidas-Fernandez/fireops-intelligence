@@ -20,3 +20,20 @@ class TransferAssetResponse(BaseModel):
     destination_location_id: int
     reason: str | None
     observations: str | None
+
+
+class MovementItemResponse(BaseModel):
+    id: int
+    asset_id: int
+    asset_code: str
+    asset_name: str
+    user_id: int
+    user_email: str | None = None
+    movement_type: str
+    occurred_at: datetime
+    origin_location_id: int | None = None
+    origin_location_name: str | None = None
+    destination_location_id: int | None = None
+    destination_location_name: str | None = None
+    reason: str | None = None
+    observations: str | None = None

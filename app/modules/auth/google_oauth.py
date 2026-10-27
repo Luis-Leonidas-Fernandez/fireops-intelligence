@@ -12,7 +12,10 @@ from google.auth.transport.requests import Request as GoogleRequest
 from google.oauth2 import id_token
 
 from app.config.settings import Settings
-from app.modules.auth.google_observability import observe_google_auth
+from app.modules.auth.google_observability import (
+    SAFE_ERROR_CLASSES,
+    observe_google_auth,
+)
 from app.modules.auth.validations.credentials import (
     normalize_display_name,
     normalize_email,
@@ -96,6 +99,43 @@ async def exchange_code(
         raise GoogleOAuthFailure("GOOGLE_AUTH_FAILED") from error
 
 
+def classify_verification_error(error: Exception) -> tuple[str, str]:
+    """Classify an exception from verify_oauth2_token into safe allowlisted tokens.
+
+    Inspects error in memory without ever persisting or leaking raw error text,
+    tokens, claims, or credentials.
+    Returns: (safe_error_class, safe_reason_code)
+    """
+    raw_class = type(error).__name__
+    safe_class = raw_class if raw_class in SAFE_ERROR_CLASSES else "UnknownError"
+
+    msg = str(error).lower()
+    if "used too early" in msg:
+        safe_reason = "token_used_too_early"
+    elif "expired" in msg:
+        safe_reason = "token_expired"
+    elif "wrong audience" in msg:
+        safe_reason = "audience_mismatch"
+    elif "certificate for key id" in msg or "unable to find a signing key" in msg:
+        safe_reason = "signing_key_not_found"
+    elif "could not verify token signature" in msg or "invalid signature" in msg:
+        safe_reason = "signature_invalid"
+    elif "wrong issuer" in msg:
+        safe_reason = "wrong_issuer"
+    elif "fetch certificates" in msg:
+        safe_reason = "certs_transport_error"
+    elif "unsupported signature algorithm" in msg:
+        safe_reason = "unsupported_algorithm"
+    elif raw_class == "MalformedError":
+        safe_reason = "malformed_token"
+    elif raw_class == "TransportError":
+        safe_reason = "certs_transport_error"
+    else:
+        safe_reason = "unknown_verification_error"
+
+    return safe_class, safe_reason
+
+
 async def verify_identity(
     token: str, nonce: str, settings: Settings, *, attempt_id: str = "untracked"
 ) -> GoogleIdentity:
@@ -133,6 +173,12 @@ async def verify_identity(
     except GoogleOAuthFailure:
         raise
     except Exception as error:
-        # Keep crypto/network errors generic; exception text may contain provider data.
-        observe_google_auth("identity", "failed", attempt_id, reason="verification_error")
+        safe_class, safe_reason = classify_verification_error(error)
+        observe_google_auth(
+            "identity",
+            "failed",
+            attempt_id,
+            reason=safe_reason,
+            error_class=safe_class,
+        )
         raise GoogleOAuthFailure("GOOGLE_AUTH_FAILED") from error

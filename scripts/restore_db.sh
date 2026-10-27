@@ -72,11 +72,30 @@ fi
 
 # 2. Checksum verification prior to any database operation
 SHA_FILE="${DUMP_FILE%.*}.sha256"
+SHA_FILE_EXACT="${DUMP_FILE}.sha256"
 META_FILE="${DUMP_FILE%.*}.meta.json"
+MANIFEST_FILE="${DUMP_FILE%.*}.manifest.json"
 EXPECTED_SHA=""
 
-if [[ -f "$SHA_FILE" ]]; then
+if [[ -f "$SHA_FILE_EXACT" ]]; then
+  EXPECTED_SHA="$(cut -d' ' -f1 < "$SHA_FILE_EXACT" | tr -d ' \n\r')"
+elif [[ -f "$SHA_FILE" ]]; then
   EXPECTED_SHA="$(cut -d' ' -f1 < "$SHA_FILE" | tr -d ' \n\r')"
+elif [[ -f "$MANIFEST_FILE" ]]; then
+  EXPECTED_SHA="$("$PYTHON" -c "
+import json, sys, os
+try:
+    with open(sys.argv[1], encoding='utf-8') as f:
+        meta = json.load(f)
+        files = meta.get('files', {})
+        ext = 'sql' if sys.argv[2].endswith('.sql') else 'dump'
+        if ext in files and isinstance(files[ext], dict) and 'sha256' in files[ext]:
+            print(files[ext]['sha256'])
+        elif 'sha256' in meta:
+            print(meta['sha256'])
+except Exception:
+    pass
+" "$MANIFEST_FILE" "$DUMP_FILE")"
 elif [[ -f "$META_FILE" ]]; then
   EXPECTED_SHA="$("$PYTHON" -c "
 import json, sys
@@ -246,7 +265,11 @@ psql -d postgres -c "CREATE DATABASE \"$TARGET_DB\";" >/dev/null
 CREATED_TARGET=1
 
 echo "Restoring archive into '$TARGET_DB'..."
-pg_restore --no-owner --no-privileges --exit-on-error -d "$TARGET_DB" "$DUMP_FILE"
+if [[ "$DUMP_FILE" == *.sql ]]; then
+  psql -v ON_ERROR_STOP=1 -d "$TARGET_DB" -f "$DUMP_FILE" >/dev/null
+else
+  pg_restore --no-owner --no-privileges --exit-on-error -d "$TARGET_DB" "$DUMP_FILE"
+fi
 
 # Disarm trap on successful restore
 trap - EXIT

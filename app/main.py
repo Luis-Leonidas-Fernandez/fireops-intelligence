@@ -31,7 +31,12 @@ from app.modules.inventory.register_category.router import (
 from app.modules.inventory.register_location.router import (
     router as register_location_router,
 )
-from app.modules.inventory.transfer_asset.router import router as transfer_asset_router
+from app.modules.inventory.transfer_asset.router import (
+    router as transfer_asset_router,
+)
+from app.modules.inventory.transfer_asset.router import (
+    router_movements as movements_router,
+)
 from app.modules.inventory.update_asset.router import router as update_asset_router
 from app.shared.errors.application_error import ApplicationError
 from app.shared.errors.handlers import (
@@ -86,6 +91,7 @@ app.include_router(register_asset_router)
 app.include_router(register_category_router)
 app.include_router(register_location_router)
 app.include_router(transfer_asset_router)
+app.include_router(movements_router)
 app.include_router(auth_router)
 app.include_router(invitations_router, prefix="/auth", tags=["Authentication"])
 app.include_router(get_asset_router)
@@ -125,9 +131,7 @@ async def review_page(
     user_id = current_user_id(request)
     actor = await session.get(User, user_id) if user_id is not None else None
     if actor is None:
-        return RedirectResponse(
-            "/iniciar-sesion?next=%2Fsolicitudes", status_code=303
-        )
+        return RedirectResponse("/iniciar-sesion?next=%2Fsolicitudes", status_code=303)
     await require_admin(session, actor)
     return FileResponse(frontend_dir / "pages" / "solicitudes" / "index.html")
 

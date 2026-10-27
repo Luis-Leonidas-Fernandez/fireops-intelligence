@@ -36,14 +36,13 @@ async def register_asset(
     except LocationUnavailableError as error:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="The location does not exist or is inactive.",
+            detail="La ubicación seleccionada no existe o se encuentra inactiva.",
         ) from error
     except IntegrityError as error:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=(
-                "The asset could not be created. "
-                "The internal code may already exist or the category may not exist."
+                "El código interno ingresado ya existe en el inventario o la categoría es inválida."
             ),
         ) from error
 

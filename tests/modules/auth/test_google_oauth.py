@@ -755,6 +755,141 @@ async def test_google_identity_rejects_provider_verification_errors(
     assert failure.value.code == "GOOGLE_AUTH_FAILED"
 
 
+def test_classify_verification_error_maps_expected_reasons() -> None:
+    from google.auth import exceptions as g_exceptions
+
+    # Clock skew: token used too early
+    c, r = google_oauth.classify_verification_error(
+        g_exceptions.InvalidValue("Token used too early, 1 < 2. Check clock.")
+    )
+    assert c == "InvalidValue"
+    assert r == "token_used_too_early"
+
+    # Clock skew: token expired
+    c, r = google_oauth.classify_verification_error(
+        g_exceptions.InvalidValue("Token expired, 2 < 3")
+    )
+    assert c == "InvalidValue"
+    assert r == "token_expired"
+
+    # Audience mismatch
+    c, r = google_oauth.classify_verification_error(
+        g_exceptions.InvalidValue("Token has wrong audience bad-aud, expected good-aud")
+    )
+    assert c == "InvalidValue"
+    assert r == "audience_mismatch"
+
+    # Missing signing key
+    c, r = google_oauth.classify_verification_error(
+        g_exceptions.MalformedError("Certificate for key id 12345 not found.")
+    )
+    assert c == "MalformedError"
+    assert r == "signing_key_not_found"
+
+    # Signature failure
+    c, r = google_oauth.classify_verification_error(
+        g_exceptions.MalformedError("Could not verify token signature.")
+    )
+    assert c == "MalformedError"
+    assert r == "signature_invalid"
+
+    # Wrong issuer
+    c, r = google_oauth.classify_verification_error(
+        g_exceptions.GoogleAuthError("Wrong issuer. 'iss' should be accounts.google.com")
+    )
+    assert c == "GoogleAuthError"
+    assert r == "wrong_issuer"
+
+    # Transport error
+    c, r = google_oauth.classify_verification_error(
+        g_exceptions.TransportError("Could not fetch certificates at https://certs")
+    )
+    assert c == "TransportError"
+    assert r == "certs_transport_error"
+
+    # Untrusted/arbitrary exception class and message
+    class CustomHackerError(Exception):
+        pass
+
+    c, r = google_oauth.classify_verification_error(
+        CustomHackerError("Some raw internal details")
+    )
+    assert c == "UnknownError"
+    assert r == "unknown_verification_error"
+
+
+@pytest.mark.asyncio
+async def test_verify_identity_logs_sanitized_reason_without_sensitive_data(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    from google.auth import exceptions as g_exceptions
+
+    sensitive_token = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.sensitive-payload"
+    sensitive_email = "victim-secret-mailbox@example.com"
+
+    def reject_with_sensitive_msg(*_args: object) -> None:
+        raise g_exceptions.InvalidValue(
+            f"Token used too early, 100 < 200. Token={sensitive_token} User={sensitive_email}"
+        )
+
+    monkeypatch.setattr(google_oauth.id_token, "verify_oauth2_token", reject_with_sensitive_msg)
+    settings = get_settings().model_copy(
+        update={"google_client_id": "web-client-id.example"}
+    )
+
+    caplog.set_level(logging.INFO, logger="uvicorn.error")
+    with pytest.raises(GoogleOAuthFailure) as failure:
+        await google_oauth.verify_identity(
+            "token", "nonce", settings, attempt_id="0123456789abcdef01234567"
+        )
+
+    # Client still receives standard GOOGLE_AUTH_FAILED
+    assert failure.value.code == "GOOGLE_AUTH_FAILED"
+
+    # Check the structured audit event
+    events = [
+        json.loads(r.message)
+        for r in caplog.records
+        if r.name == "uvicorn.error" and '{"event":"google_oauth"' in r.message
+    ]
+    identity_events = [e for e in events if e.get("stage") == "identity"]
+    assert len(identity_events) == 1
+    event = identity_events[0]
+
+    assert event["event"] == "google_oauth"
+    assert event["stage"] == "identity"
+    assert event["outcome"] == "failed"
+    assert event["error_class"] == "InvalidValue"
+    assert event["reason"] == "token_used_too_early"
+
+    # Strict privacy assertion: NO sensitive data leaked into logger
+    assert sensitive_token not in caplog.text
+    assert sensitive_email not in caplog.text
+
+
+def test_observe_google_auth_redacts_untrusted_error_class(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(logging.INFO, logger="uvicorn.error")
+    observe_google_auth(
+        "identity",
+        "failed",
+        "0123456789abcdef01234567",
+        reason="token_used_too_early",
+        error_class="UntrustedInjectedClass",
+    )
+
+    events = [
+        json.loads(r.message)
+        for r in caplog.records
+        if r.name == "uvicorn.error" and '{"event":"google_oauth"' in r.message
+    ]
+    assert len(events) == 1
+    assert events[0]["error_class"] == "UnknownError"
+    assert events[0]["reason"] == "token_used_too_early"
+
+
 @pytest.mark.asyncio
 async def test_real_google_token_verifier_checks_signature_audience_issuer_and_expiry(
     monkeypatch: pytest.MonkeyPatch,

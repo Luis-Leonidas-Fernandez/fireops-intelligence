@@ -1,21 +1,41 @@
 from typing import Annotated, Literal, cast
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.database.session import get_database_session
 from app.modules.auth.dependencies import require_authenticated_user
 from app.modules.auth.models import User
-from app.modules.inventory.shared.models import Asset, Location, Movement
+from app.modules.inventory.shared.models import Movement
 from app.modules.inventory.transfer_asset.schemas import (
+    MovementItemResponse,
     TransferAssetRequest,
     TransferAssetResponse,
+)
+from app.modules.inventory.transfer_asset.service import (
+    AssetNotFoundError,
+    DestinationUnavailableError,
+    SameLocationError,
+    TransferConstraintViolationError,
+)
+from app.modules.inventory.transfer_asset.service import (
+    list_all_movements as list_all_movements_service,
+)
+from app.modules.inventory.transfer_asset.service import (
+    list_asset_transfers as get_transfers_service,
+)
+from app.modules.inventory.transfer_asset.service import (
+    transfer_asset as transfer_asset_service,
 )
 
 router = APIRouter(
     prefix="/inventory/assets",
+    tags=["Inventory"],
+    dependencies=[Depends(require_authenticated_user)],
+)
+
+router_movements = APIRouter(
+    prefix="/inventory/movements",
     tags=["Inventory"],
     dependencies=[Depends(require_authenticated_user)],
 )
@@ -48,38 +68,34 @@ async def transfer_asset(
     session: DatabaseSession,
     user: CurrentUser,
 ) -> TransferAssetResponse:
-    asset = await session.scalar(
-        select(Asset).where(Asset.id == asset_id).with_for_update()
-    )
-    if asset is None:
-        raise HTTPException(status_code=404, detail="Asset not found.")
-
-    destination = await session.get(Location, payload.destination_location_id)
-    if destination is None or not destination.activa:
-        raise HTTPException(status_code=409, detail="The destination is unavailable.")
-    if asset.ubicacion_id == destination.id:
-        raise HTTPException(status_code=409, detail="The asset is already there.")
-
-    movement = Movement(
-        bien_id=asset.id,
-        usuario_id=user.id,
-        tipo_movimiento="TRASLADO",
-        ubicacion_origen_id=asset.ubicacion_id,
-        ubicacion_destino_id=destination.id,
-        motivo=payload.reason,
-        observaciones=payload.observations,
-    )
-    asset.ubicacion_id = destination.id
-    session.add(movement)
     try:
-        await session.commit()
-        await session.refresh(movement)
-    except IntegrityError as error:
-        await session.rollback()
+        movement = await transfer_asset_service(
+            session=session,
+            asset_id=asset_id,
+            payload=payload,
+            actor_id=user.id,
+        )
+    except AssetNotFoundError as error:
         raise HTTPException(
-            status_code=409,
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Asset not found.",
+        ) from error
+    except DestinationUnavailableError as error:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="The destination is unavailable.",
+        ) from error
+    except SameLocationError as error:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="The asset is already there.",
+        ) from error
+    except TransferConstraintViolationError as error:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
             detail="The transfer violates inventory location constraints.",
         ) from error
+
     return transfer_response(movement)
 
 
@@ -87,11 +103,19 @@ async def transfer_asset(
 async def list_asset_transfers(
     asset_id: int, session: DatabaseSession
 ) -> list[TransferAssetResponse]:
-    if await session.get(Asset, asset_id) is None:
-        raise HTTPException(status_code=404, detail="Asset not found.")
-    result = await session.scalars(
-        select(Movement)
-        .where(Movement.bien_id == asset_id, Movement.tipo_movimiento == "TRASLADO")
-        .order_by(Movement.fecha, Movement.id)
-    )
-    return [transfer_response(movement) for movement in result.all()]
+    try:
+        movements = await get_transfers_service(session=session, asset_id=asset_id)
+    except AssetNotFoundError as error:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Asset not found.",
+        ) from error
+
+    return [transfer_response(movement) for movement in movements]
+
+
+@router_movements.get("", response_model=list[MovementItemResponse])
+async def list_movements(
+    session: DatabaseSession,
+) -> list[MovementItemResponse]:
+    return await list_all_movements_service(session)

@@ -14,23 +14,110 @@
   const profileMenu = document.querySelector("#profile-menu");
   let toastTimer;
 
+  function populateCategoryOptions(categories) {
+    const catSelect = document.querySelector("#asset-category");
+    if (!catSelect || !Array.isArray(categories)) return;
+    const currentVal = catSelect.value;
+    const isNew = currentVal === "__NEW__";
+    const options = [
+      `<option value="" disabled ${!currentVal ? "selected" : ""}>Seleccione una categoría…</option>`,
+      ...categories.map(c => `<option value="${c.id}">${c.name}</option>`),
+      `<option value="__NEW__" class="opt-new-category" ${isNew ? "selected" : ""}>+ Crear nueva categoría…</option>`
+    ];
+    catSelect.innerHTML = options.join("");
+    if (isNew) {
+      catSelect.value = "__NEW__";
+    } else if (currentVal && categories.some(c => String(c.id) === currentVal)) {
+      catSelect.value = currentVal;
+    }
+  }
+
+  function extractApiErrorMessage(errData, fallbackMsg = "No se pudo registrar el bien.") {
+    if (!errData) return fallbackMsg;
+    if (typeof errData.error?.message === "string") {
+      const fields = errData.error.details?.fields;
+      if (Array.isArray(fields) && fields.length > 0) {
+        const fieldDetails = fields.map(f => `${f.field}: ${f.message}`).join(", ");
+        return `${errData.error.message} (${fieldDetails})`;
+      }
+      return errData.error.message;
+    }
+    if (typeof errData.detail === "string") return errData.detail;
+    if (Array.isArray(errData.detail) && errData.detail[0]?.msg) return errData.detail[0].msg;
+    if (typeof errData.message === "string") return errData.message;
+    return fallbackMsg;
+  }
+
+  function populateLocationOptions(locations) {
+    const locSelect = document.querySelector("#asset-location");
+    if (!locSelect) return;
+    const currentVal = locSelect.value;
+    const hasLocations = Array.isArray(locations) && locations.length > 0;
+    const options = [
+      `<option value="" ${!currentVal ? "selected" : ""}>Sin asignación fija (Depósito)</option>`,
+      ...(hasLocations ? locations.map(l => `<option value="${l.id}">${l.name}</option>`) : [])
+    ];
+    locSelect.innerHTML = options.join("");
+    if (currentVal && hasLocations && locations.some(l => String(l.id) === currentVal)) {
+      locSelect.value = currentVal;
+    }
+  }
+
   async function checkApiConnection() {
     const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), 5000);
+    const timeout = window.setTimeout(() => controller.abort(), 6000);
 
     try {
-      const healthResponse = await fetch("/health", { signal: controller.signal });
-      if (!healthResponse.ok || (await healthResponse.json()).status !== "ok") throw new Error("API unavailable");
+      const [healthResponse, categoriesResponse, assetsResponse, locationsResponse, movementsResponse] = await Promise.all([
+        fetch("/health", { signal: controller.signal }),
+        fetch("/inventory/categories", { signal: controller.signal, credentials: "same-origin" }),
+        fetch("/inventory/assets/", { signal: controller.signal, credentials: "same-origin" }),
+        fetch("/inventory/locations", { signal: controller.signal, credentials: "same-origin" }),
+        fetch("/inventory/movements", { signal: controller.signal, credentials: "same-origin" }).catch(() => ({ ok: false })),
+      ]);
 
-      const categoriesResponse = await fetch("/inventory/categories", { signal: controller.signal });
+      if (!healthResponse.ok || (await healthResponse.json()).status !== "ok") throw new Error("API unavailable");
       if (!categoriesResponse.ok) throw new Error("Categories unavailable");
       const categories = await categoriesResponse.json();
       if (!Array.isArray(categories)) throw new Error("Unexpected categories response");
 
-      apiStatus.textContent = `Fire Control API conectada · Categorías en vivo: ${categories.length}`;
+      let assets = [];
+      if (assetsResponse.ok) {
+        const assetsData = await assetsResponse.json();
+        if (Array.isArray(assetsData)) assets = assetsData;
+      }
+
+      let locations = [];
+      if (locationsResponse.ok) {
+        const locationsData = await locationsResponse.json();
+        if (Array.isArray(locationsData)) locations = locationsData;
+      }
+
+      let movements = [];
+      if (movementsResponse && movementsResponse.ok && typeof movementsResponse.json === "function") {
+        try {
+          const movementsData = await movementsResponse.json();
+          if (Array.isArray(movementsData)) movements = movementsData;
+        } catch (_) {}
+      }
+
+      populateCategoryOptions(categories);
+      populateLocationOptions(locations);
+
+      const realData = { assets, categories, locations, movements };
+      if (window.DashboardRenderer && typeof window.DashboardRenderer.setRealData === "function") {
+        window.DashboardRenderer.setRealData(realData);
+      }
+
+      apiStatus.textContent = `Fire Control API conectada · Datos en tiempo real (Bienes: ${assets.length} · Categorías: ${categories.length} · Ubicaciones: ${locations.length} · Movimientos: ${movements.length})`;
       apiStatus.dataset.state = "connected";
+
+      const dataNote = document.querySelector(".data-note");
+      if (dataNote) {
+        dataNote.textContent = "Datos en tiempo real sincronizados con la base de datos de Fire Control";
+      }
     } catch (_error) {
-      apiStatus.textContent = "Fire Control API no disponible · Conteo de categorías en vivo no disponible · Datos de demostración visibles";
+      apiStatus.textContent = "Fire Control API en modo local · Datos de demostración visibles";
       apiStatus.dataset.state = "offline";
     } finally {
       window.clearTimeout(timeout);
@@ -61,6 +148,22 @@
     window.history.replaceState(null, "", "/");
   }
 
+  const VIEW_SUBTITLES = {
+    "Inventario general": "Vista operativa de bienes, estados y movimientos del inventario.",
+    "Bienes": "Gestión integral de equipamiento, herramientas y materiales operativos.",
+    "Nuevo bien": "Alta de equipamiento, herramientas y materiales operativos.",
+    "Categorías": "Clasificación y catálogo de bienes del cuerpo de bomberos.",
+    "Nueva categoría": "Alta y registro de nueva categoría en el catálogo operativo.",
+    "Ubicaciones": "Destinos operativos, cuarteles, depósitos y móviles asignados.",
+    "Invitaciones": "Control y emisión de invitaciones de acceso para personal autorizado.",
+    "Vehículos": "Parque automotor, autobombas, cisternas y unidades de apoyo.",
+    "Responsables": "Asignación de personal a cargo de activos y equipamiento.",
+    "Movimientos": "Historial de ingresos, egresos, traslados y bajas.",
+    "Auditoría": "Registro de eventos del sistema y trazabilidad de acciones.",
+    "Reportes": "Informes consolidados y estadísticas de inventario.",
+    "Alertas": "Monitoreo preventivo y avisos de mantenimiento técnico.",
+  };
+
   function setActiveView(view) {
     if (window.FireNavigationController && typeof window.FireNavigationController.selectView === "function") {
       const allowed = window.FireNavigationController.selectView(view);
@@ -70,17 +173,77 @@
       }
     }
     document.querySelectorAll("[data-view]").forEach(button => {
-      const active = button.dataset.view === view;
+      const isNav = Boolean(button.closest("nav"));
+      const active = (button.dataset.view === view) ||
+        (isNav && view === "Nuevo bien" && button.dataset.view === "Bienes") ||
+        (isNav && view === "Nueva categoría" && button.dataset.view === "Categorías");
       button.classList.toggle("is-active", active);
-      if (button.closest("nav")) active ? button.setAttribute("aria-current", "page") : button.removeAttribute("aria-current");
+      if (isNav) active ? button.setAttribute("aria-current", "page") : button.removeAttribute("aria-current");
     });
-    document.querySelector("#page-title").textContent = view;
-    document.querySelector("#page-subtitle").textContent = view === "Inventario general" ? "Vista operativa de bienes, estados y movimientos del inventario." : `${view}: vista ilustrativa con datos de demostración.`;
+
+    const titleEl = document.querySelector("#page-title");
+    const subtitleEl = document.querySelector("#page-subtitle");
+    if (titleEl) titleEl.textContent = view;
+    if (subtitleEl) subtitleEl.textContent = VIEW_SUBTITLES[view] || `${view}: vista ilustrativa con datos de demostración.`;
+
+    const headingActions = document.querySelector("#dashboard-heading-actions");
+    if (headingActions) {
+      headingActions.hidden = (view !== "Inventario general");
+    }
+
+    const viewContainers = document.querySelectorAll(".view-content");
+    let matchedSpecific = false;
+    viewContainers.forEach(container => {
+      const targetView = container.dataset.view;
+      if (targetView === view) {
+        container.hidden = false;
+        matchedSpecific = true;
+      } else if (container.id !== "view-generic") {
+        container.hidden = true;
+      }
+    });
+
+    const genericContainer = document.querySelector("#view-generic");
+    if (genericContainer) {
+      if (!matchedSpecific && view !== "Inventario general") {
+        genericContainer.hidden = false;
+        const kicker = genericContainer.querySelector(".panel-kicker");
+        if (kicker) kicker.textContent = `Módulo ${view}`;
+        const h2 = genericContainer.querySelector("h2");
+        if (h2) h2.textContent = `Sección de ${view}`;
+      } else {
+        genericContainer.hidden = true;
+      }
+    }
+
     showToast(`${view} seleccionado`);
   }
 
   function csvCell(value) { return `"${String(value).replaceAll('"', '""')}"`; }
   function exportCsv() {
+    const realData = window.DashboardRenderer && typeof window.DashboardRenderer.getRealData === "function" ? window.DashboardRenderer.getRealData() : null;
+    if (realData && realData.assets.length) {
+      const catMap = new Map(realData.categories.map(c => [c.id, c.name]));
+      const locMap = new Map(realData.locations.map(l => [l.id, l.name]));
+      const rows = [
+        ["Fire Control — Inventario en tiempo real", new Date().toLocaleString("es-AR")],
+        ["Código", "Bien / Denominación", "Categoría", "Ubicación", "Estado"],
+      ];
+      realData.assets.forEach(a => {
+        rows.push([
+          a.internal_code,
+          a.name,
+          catMap.get(a.category_id) || "Sin categoría",
+          locMap.get(a.location_id) || "Depósito Central",
+          a.location_id ? "En servicio" : "En depósito",
+        ]);
+      });
+      const blob = new Blob([rows.map(row => row.map(csvCell).join(",")).join("\n")], { type: "text/csv;charset=utf-8" });
+      const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `fire-control-inventario-real.csv`; document.body.append(link); link.click(); link.remove(); URL.revokeObjectURL(link.href);
+      showToast("CSV con datos en tiempo real exportado");
+      return;
+    }
+
     const period = data.periods[dateRange.value];
     const multiplier = period.multiplier;
     const rows = [["Fire Control — Inventario", period.label], ["Datos de demostración"], [], ["Bien", "Código", "Movimiento", "Cantidad"]];
@@ -133,6 +296,739 @@
     showToast(lightMode ? "Modo claro activado" : "Modo oscuro activado");
   });
   mobileMenu.addEventListener("click", () => { const expanded = mobileMenu.getAttribute("aria-expanded") === "true"; mobileMenu.setAttribute("aria-expanded", String(!expanded)); mobileNav.hidden = expanded; });
-  document.querySelectorAll(".table-tabs button").forEach(button => button.addEventListener("click", () => { document.querySelectorAll(".table-tabs button").forEach(tab => { tab.classList.toggle("is-active", tab === button); tab.setAttribute("aria-selected", String(tab === button)); }); showToast(`Filtro ilustrativo: ${button.textContent.toLowerCase()}`); }));
+  document.querySelectorAll(".table-tabs button").forEach(button => {
+    button.addEventListener("click", () => {
+      const tabContainer = button.closest(".table-tabs");
+      if (tabContainer) {
+        tabContainer.querySelectorAll("button").forEach(tab => {
+          const isCurrent = (tab === button);
+          tab.classList.toggle("is-active", isCurrent);
+          tab.setAttribute("aria-selected", String(isCurrent));
+        });
+      }
+      const filter = button.dataset.filter;
+      const panel = button.closest(".panel");
+      if (panel && filter) {
+        if (panel.classList.contains("countries-panel") && window.DashboardRenderer && typeof window.DashboardRenderer.setRealFilter === "function") {
+          window.DashboardRenderer.setRealFilter(filter);
+        } else {
+          const rows = panel.querySelectorAll("tbody tr");
+          rows.forEach(row => {
+            if (filter === "all") {
+              row.hidden = false;
+            } else {
+              const rowStatus = row.dataset.status || row.dataset.type;
+              row.hidden = (rowStatus !== filter);
+            }
+          });
+        }
+      }
+      showToast(`Filtro ilustrativo: ${button.textContent.trim().toLowerCase()}`);
+    });
+  });
+
+  const nextAssetsBtn = document.querySelector("#btn-next-assets");
+  const prevAssetsBtn = document.querySelector("#btn-prev-assets");
+  if (nextAssetsBtn) {
+    nextAssetsBtn.addEventListener("click", () => {
+      if (window.DashboardRenderer && typeof window.DashboardRenderer.nextAssetsPage === "function") {
+        window.DashboardRenderer.nextAssetsPage();
+      }
+    });
+  }
+  if (prevAssetsBtn) {
+    prevAssetsBtn.addEventListener("click", () => {
+      if (window.DashboardRenderer && typeof window.DashboardRenderer.prevAssetsPage === "function") {
+        window.DashboardRenderer.prevAssetsPage();
+      }
+    });
+  }
+
+  document.querySelectorAll(".view-search input").forEach(input => {
+    input.addEventListener("input", () => {
+      const query = input.value.trim().toLowerCase();
+      const panel = input.closest(".panel");
+      if (!panel) return;
+      const rows = panel.querySelectorAll("tbody tr");
+      rows.forEach(row => {
+        if (!query) {
+          row.hidden = false;
+        } else {
+          row.hidden = !row.textContent.toLowerCase().includes(query);
+        }
+      });
+    });
+  });
+
+  // Delegated handler ensures clicks on button, icon, or text reliably activate the target view
+  document.addEventListener("click", (event) => {
+    const target = event.target.closest("#btn-nuevo-bien, [data-view-target='Nuevo bien'], button[data-view='Nuevo bien']");
+    if (target) {
+      event.preventDefault();
+      setActiveView("Nuevo bien");
+      return;
+    }
+    const backTarget = event.target.closest("#btn-cancelar-crear-bien, [data-view-target='Bienes']");
+    if (backTarget) {
+      event.preventDefault();
+      setActiveView("Bienes");
+      return;
+    }
+    const nuevaCatTarget = event.target.closest("#btn-nueva-categoria, [data-view-target='Nueva categoría'], button[data-view='Nueva categoría']");
+    if (nuevaCatTarget) {
+      event.preventDefault();
+      setActiveView("Nueva categoría");
+      return;
+    }
+    const cancelCatTarget = event.target.closest("#btn-cancelar-crear-categoria, [data-view-target='Categorías']");
+    if (cancelCatTarget) {
+      event.preventDefault();
+      setActiveView("Categorías");
+      return;
+    }
+    const genericTarget = event.target.closest("[data-view-target]");
+    if (genericTarget && genericTarget.dataset.viewTarget) {
+      event.preventDefault();
+      setActiveView(genericTarget.dataset.viewTarget);
+    }
+  });
+
+  const formCrearBien = document.querySelector("#form-crear-bien");
+  const groupSelectCat = document.querySelector("#group-select-category");
+  const groupNewCat = document.querySelector("#group-new-category");
+  const catSelect = document.querySelector("#asset-category");
+  const newCatInput = document.querySelector("#asset-new-category");
+  const btnModeExisting = document.querySelector("#btn-mode-existing");
+  const btnModeNew = document.querySelector("#btn-mode-new");
+  const btnCancelNewCat = document.querySelector("#btn-cancel-new-cat");
+
+  function switchToNewCategoryMode() {
+    if (btnModeNew) {
+      btnModeNew.classList.add("is-active");
+      btnModeNew.setAttribute("aria-selected", "true");
+    }
+    if (btnModeExisting) {
+      btnModeExisting.classList.remove("is-active");
+      btnModeExisting.setAttribute("aria-selected", "false");
+    }
+    if (groupSelectCat) {
+      groupSelectCat.hidden = true;
+      groupSelectCat.setAttribute("hidden", "");
+      groupSelectCat.style.display = "none";
+    }
+    if (groupNewCat) {
+      groupNewCat.hidden = false;
+      groupNewCat.removeAttribute("hidden");
+      groupNewCat.style.display = "flex";
+      groupNewCat.style.flexDirection = "column";
+    }
+    if (newCatInput) {
+      newCatInput.focus();
+    }
+  }
+
+  function switchToSelectCategoryMode() {
+    if (btnModeExisting) {
+      btnModeExisting.classList.add("is-active");
+      btnModeExisting.setAttribute("aria-selected", "true");
+    }
+    if (btnModeNew) {
+      btnModeNew.classList.remove("is-active");
+      btnModeNew.setAttribute("aria-selected", "false");
+    }
+    if (groupNewCat) {
+      groupNewCat.hidden = true;
+      groupNewCat.setAttribute("hidden", "");
+      groupNewCat.style.display = "none";
+    }
+    if (newCatInput) {
+      newCatInput.value = "";
+    }
+    if (groupSelectCat) {
+      groupSelectCat.hidden = false;
+      groupSelectCat.removeAttribute("hidden");
+      groupSelectCat.style.display = "block";
+    }
+    if (catSelect && catSelect.value === "__NEW__") {
+      catSelect.value = "";
+    }
+  }
+
+  if (btnModeExisting) {
+    btnModeExisting.addEventListener("click", () => {
+      switchToSelectCategoryMode();
+      catSelect?.focus();
+    });
+  }
+
+  if (btnModeNew) {
+    btnModeNew.addEventListener("click", () => {
+      switchToNewCategoryMode();
+    });
+  }
+
+  if (btnCancelNewCat) {
+    btnCancelNewCat.addEventListener("click", () => {
+      switchToSelectCategoryMode();
+      catSelect?.focus();
+    });
+  }
+
+  if (catSelect) {
+    catSelect.addEventListener("change", () => {
+      if (catSelect.value === "__NEW__") {
+        switchToNewCategoryMode();
+      }
+    });
+  }
+
+  if (newCatInput) {
+    newCatInput.addEventListener("input", () => {
+      if (newCatInput.value.trim().length > 0) {
+        if (btnModeNew && !btnModeNew.classList.contains("is-active")) {
+          btnModeNew.classList.add("is-active");
+          btnModeNew.setAttribute("aria-selected", "true");
+        }
+        if (btnModeExisting) {
+          btnModeExisting.classList.remove("is-active");
+          btnModeExisting.setAttribute("aria-selected", "false");
+        }
+      }
+    });
+  }
+
+  const cancelBienBtn = document.querySelector("#btn-cancelar-crear-bien");
+  if (cancelBienBtn) {
+    cancelBienBtn.addEventListener("click", () => {
+      formCrearBien?.reset();
+      switchToSelectCategoryMode();
+    });
+  }
+
+  if (formCrearBien) {
+    formCrearBien.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const codeInput = formCrearBien.querySelector("#asset-code");
+      const nameInput = formCrearBien.querySelector("#asset-name");
+      const locSelect = formCrearBien.querySelector("#asset-location");
+      const submitBtn = formCrearBien.querySelector("#btn-submit-bien");
+
+      const codeVal = codeInput?.value?.trim() || "";
+      const nameVal = nameInput?.value?.trim() || "";
+      const newCatVal = newCatInput?.value?.trim() || "";
+      const catVal = catSelect?.value;
+      const isNewCat = Boolean(newCatVal) ||
+        Boolean(btnModeNew?.classList.contains("is-active")) ||
+        (catVal === "__NEW__") ||
+        (groupNewCat && !groupNewCat.hidden && groupNewCat.style.display !== "none");
+
+      if (!codeVal || codeVal.length < 3) {
+        showToast("El código interno es obligatorio (mínimo 3 caracteres)");
+        codeInput?.focus();
+        return;
+      }
+      if (!nameVal || nameVal.length < 3) {
+        showToast("La denominación / nombre es obligatoria (mínimo 3 caracteres)");
+        nameInput?.focus();
+        return;
+      }
+
+      let payload = {
+        internal_code: codeVal,
+        name: nameVal,
+        location_id: locSelect?.value ? Number(locSelect.value) : null,
+      };
+
+      if (isNewCat) {
+        if (!newCatVal || newCatVal.length < 3) {
+          showToast("Ingrese el nombre de la nueva categoría (mínimo 3 caracteres)");
+          newCatInput?.focus();
+          return;
+        }
+        payload.new_category_name = newCatVal;
+      } else {
+        if (!catVal || catVal === "__NEW__") {
+          showToast("Seleccione una categoría o cree una nueva (*)");
+          catSelect?.focus();
+          return;
+        }
+        payload.category_id = Number(catVal);
+      }
+
+      const origBtnText = submitBtn ? submitBtn.innerHTML : "";
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = `<span aria-hidden="true">⏳</span> Registrando bien…`;
+      }
+
+      try {
+        const response = await fetch("/inventory/assets", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+          },
+          body: JSON.stringify(payload),
+          credentials: "same-origin",
+        });
+
+        if (!response.ok) {
+          let errorMsg = "No se pudo registrar el bien.";
+          try {
+            const errData = await response.json();
+            errorMsg = extractApiErrorMessage(errData, "No se pudo registrar el bien.");
+          } catch (_) {}
+          showToast(`Error: ${errorMsg}`);
+          return;
+        }
+
+        const successMsg = isNewCat
+          ? `Bien "${nameVal}" y categoría "${newCatVal}" registrados con éxito`
+          : `Bien "${nameVal}" registrado correctamente`;
+        showToast(successMsg);
+
+        formCrearBien.reset();
+        switchToSelectCategoryMode();
+        await checkApiConnection();
+        setActiveView("Bienes");
+      } catch (_err) {
+        const successMsg = isNewCat
+          ? `Bien "${nameVal}" y categoría "${newCatVal}" registrados (modo local)`
+          : `Bien "${nameVal}" registrado (modo local)`;
+        showToast(successMsg);
+        formCrearBien.reset();
+        switchToSelectCategoryMode();
+        setActiveView("Bienes");
+      } finally {
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = origBtnText;
+        }
+      }
+    });
+  }
+
+  const formCrearCategoria = document.querySelector("#form-crear-categoria");
+  if (formCrearCategoria) {
+    formCrearCategoria.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const nameInput = formCrearCategoria.querySelector("#category-name");
+      const nameVal = nameInput?.value?.trim();
+      if (!nameVal || nameVal.length < 3) {
+        showToast("Complete el nombre de la categoría (mínimo 3 caracteres)");
+        nameInput?.focus();
+        return;
+      }
+
+      const submitBtn = formCrearCategoria.querySelector("#btn-submit-categoria, button[type='submit']");
+      const origText = submitBtn ? submitBtn.innerHTML : "";
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = `<span aria-hidden="true">⏳</span> Guardando…`;
+      }
+
+      try {
+        const response = await fetch("/inventory/categories", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Accept": "application/json" },
+          body: JSON.stringify({ name: nameVal }),
+          credentials: "same-origin",
+        });
+
+        if (!response.ok) {
+          let errDetail = "La categoría ya existe o no se pudo crear";
+          try {
+            const errJson = await response.json();
+            errDetail = extractApiErrorMessage(errJson, errDetail);
+          } catch (_) {}
+          showToast(`Error: ${errDetail}`);
+          return;
+        }
+
+        showToast(`Categoría "${nameVal}" registrada correctamente`);
+        formCrearCategoria.reset();
+        await checkApiConnection();
+        setActiveView("Categorías");
+      } catch (_err) {
+        showToast(`Categoría "${nameVal}" registrada (modo local)`);
+        formCrearCategoria.reset();
+        setActiveView("Categorías");
+      } finally {
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = origText;
+        }
+      }
+    });
+  }
+
+  const bienesSearchInput = document.querySelector("#bienes-search-input");
+  if (bienesSearchInput) {
+    bienesSearchInput.addEventListener("input", (e) => {
+      const q = e.target.value;
+      if (window.DashboardRenderer && typeof window.DashboardRenderer.setBienesQuery === "function") {
+        window.DashboardRenderer.setBienesQuery(q);
+      }
+    });
+  }
+
+  const bienesTabs = document.querySelectorAll("#view-bienes .table-tabs button");
+  bienesTabs.forEach(btn => {
+    btn.addEventListener("click", () => {
+      bienesTabs.forEach(b => {
+        b.classList.remove("is-active");
+        b.setAttribute("aria-selected", "false");
+      });
+      btn.classList.add("is-active");
+      btn.setAttribute("aria-selected", "true");
+      const filter = btn.dataset.filter || "all";
+      if (window.DashboardRenderer && typeof window.DashboardRenderer.setBienesFilter === "function") {
+        window.DashboardRenderer.setBienesFilter(filter);
+      }
+    });
+  });
+
+  const catSearchInput = document.querySelector("#categorias-search-input");
+  if (catSearchInput) {
+    catSearchInput.addEventListener("input", (e) => {
+      const q = e.target.value;
+      if (window.DashboardRenderer && typeof window.DashboardRenderer.setCategoriasQuery === "function") {
+        window.DashboardRenderer.setCategoriasQuery(q);
+      }
+    });
+  }
+
+  // --- MODAL: MOVER BIEN DE UBICACIÓN ---
+  const modalMover = document.querySelector("#modal-mover-bien");
+  const formMoverBien = document.querySelector("#form-mover-bien");
+  const moverAssetIdInput = document.querySelector("#mover-asset-id");
+  const moverBienNombre = document.querySelector("#mover-bien-nombre");
+  const moverBienCodigo = document.querySelector("#mover-bien-codigo");
+  const moverOrigenDisplay = document.querySelector("#mover-origen-display");
+  const moverDestinoSelect = document.querySelector("#mover-destino-select");
+  const moverNuevoDestinoInput = document.querySelector("#mover-nuevo-destino-nombre");
+  const moverMotivoInput = document.querySelector("#mover-motivo");
+  const moverObsInput = document.querySelector("#mover-observaciones");
+  const btnDestModeExisting = document.querySelector("#btn-dest-mode-existing");
+  const btnDestModeNew = document.querySelector("#btn-dest-mode-new");
+  const panelSelectDestino = document.querySelector("#panel-select-destino");
+  const panelNewDestino = document.querySelector("#panel-new-destino");
+  const btnCancelNewDestino = document.querySelector("#btn-cancel-new-destino");
+  const btnCerrarModalMover = document.querySelector("#btn-cerrar-modal-mover");
+  const btnCancelarMover = document.querySelector("#btn-cancelar-mover");
+  const btnConfirmarTraslado = document.querySelector("#btn-confirmar-traslado");
+
+  function switchToDestExistingMode() {
+    if (btnDestModeExisting) {
+      btnDestModeExisting.classList.add("is-active");
+      btnDestModeExisting.setAttribute("aria-selected", "true");
+    }
+    if (btnDestModeNew) {
+      btnDestModeNew.classList.remove("is-active");
+      btnDestModeNew.setAttribute("aria-selected", "false");
+    }
+    if (panelSelectDestino) {
+      panelSelectDestino.hidden = false;
+      panelSelectDestino.removeAttribute("hidden");
+      panelSelectDestino.style.display = "block";
+    }
+    if (panelNewDestino) {
+      panelNewDestino.hidden = true;
+      panelNewDestino.setAttribute("hidden", "");
+      panelNewDestino.style.display = "none";
+    }
+    if (moverNuevoDestinoInput) {
+      moverNuevoDestinoInput.required = false;
+      moverNuevoDestinoInput.value = "";
+    }
+    if (moverDestinoSelect) {
+      moverDestinoSelect.required = true;
+      if (moverDestinoSelect.value === "__NEW__") {
+        moverDestinoSelect.value = "";
+      }
+    }
+  }
+
+  function switchToDestNewMode() {
+    if (btnDestModeNew) {
+      btnDestModeNew.classList.add("is-active");
+      btnDestModeNew.setAttribute("aria-selected", "true");
+    }
+    if (btnDestModeExisting) {
+      btnDestModeExisting.classList.remove("is-active");
+      btnDestModeExisting.setAttribute("aria-selected", "false");
+    }
+    if (panelSelectDestino) {
+      panelSelectDestino.hidden = true;
+      panelSelectDestino.setAttribute("hidden", "");
+      panelSelectDestino.style.display = "none";
+    }
+    if (panelNewDestino) {
+      panelNewDestino.hidden = false;
+      panelNewDestino.removeAttribute("hidden");
+      panelNewDestino.style.display = "flex";
+      panelNewDestino.style.flexDirection = "column";
+    }
+    if (moverDestinoSelect) {
+      moverDestinoSelect.required = false;
+    }
+    if (moverNuevoDestinoInput) {
+      moverNuevoDestinoInput.required = true;
+      moverNuevoDestinoInput.focus();
+    }
+  }
+
+  function closeMoverModal() {
+    if (modalMover) {
+      if (typeof modalMover.close === "function") {
+        modalMover.close();
+      } else {
+        modalMover.hidden = true;
+        modalMover.removeAttribute("open");
+      }
+    }
+    if (formMoverBien) formMoverBien.reset();
+    switchToDestExistingMode();
+  }
+
+  function openMoverModalForAsset(assetId) {
+    if (!modalMover) return;
+    const realData = window.DashboardRenderer && typeof window.DashboardRenderer.getRealData === "function"
+      ? window.DashboardRenderer.getRealData()
+      : null;
+    const asset = realData?.assets?.find(a => a.id === assetId);
+    if (!asset) {
+      showToast("No se encontró el bien seleccionado");
+      return;
+    }
+
+    const locMap = new Map((realData.locations || []).map(l => [l.id, l.name]));
+    const currentLocName = asset.location_id !== null
+      ? (locMap.get(asset.location_id) || "Ubicación desconocida")
+      : "Sin asignación fija (Depósito)";
+
+    if (moverAssetIdInput) moverAssetIdInput.value = asset.id;
+    if (moverBienNombre) moverBienNombre.textContent = asset.name;
+    if (moverBienCodigo) moverBienCodigo.textContent = asset.internal_code;
+    if (moverOrigenDisplay) moverOrigenDisplay.textContent = currentLocName;
+    if (moverMotivoInput) moverMotivoInput.value = "";
+    if (moverObsInput) moverObsInput.value = "";
+    if (moverNuevoDestinoInput) moverNuevoDestinoInput.value = "";
+
+    // Populate destination dropdown, excluding current location
+    if (moverDestinoSelect) {
+      const availableLocations = (realData.locations || []).filter(l => l.id !== asset.location_id);
+      const options = [
+        '<option value="" disabled selected>Seleccione el destino…</option>',
+        ...availableLocations.map(l => `<option value="${l.id}">${l.name}</option>`),
+        '<option value="__NEW__" class="opt-new-category">+ Crear nueva ubicación…</option>'
+      ];
+      moverDestinoSelect.innerHTML = options.join("");
+      moverDestinoSelect.value = "";
+    }
+
+    switchToDestExistingMode();
+
+    if (typeof modalMover.showModal === "function") {
+      modalMover.showModal();
+    } else {
+      modalMover.hidden = false;
+      modalMover.setAttribute("open", "");
+    }
+    moverDestinoSelect?.focus();
+  }
+
+  if (btnDestModeExisting) {
+    btnDestModeExisting.addEventListener("click", () => {
+      switchToDestExistingMode();
+      moverDestinoSelect?.focus();
+    });
+  }
+
+  if (btnDestModeNew) {
+    btnDestModeNew.addEventListener("click", () => {
+      switchToDestNewMode();
+    });
+  }
+
+  if (btnCancelNewDestino) {
+    btnCancelNewDestino.addEventListener("click", () => {
+      switchToDestExistingMode();
+      moverDestinoSelect?.focus();
+    });
+  }
+
+  if (moverDestinoSelect) {
+    moverDestinoSelect.addEventListener("change", () => {
+      if (moverDestinoSelect.value === "__NEW__") {
+        switchToDestNewMode();
+      }
+    });
+  }
+
+  if (btnCerrarModalMover) {
+    btnCerrarModalMover.addEventListener("click", closeMoverModal);
+  }
+  if (btnCancelarMover) {
+    btnCancelarMover.addEventListener("click", closeMoverModal);
+  }
+
+  document.addEventListener("click", (event) => {
+    const moverBtn = event.target.closest(".btn-mover-bien");
+    if (moverBtn && moverBtn.dataset.assetId) {
+      event.preventDefault();
+      openMoverModalForAsset(Number(moverBtn.dataset.assetId));
+    }
+  });
+
+  if (formMoverBien) {
+    formMoverBien.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const assetId = Number(moverAssetIdInput?.value);
+      if (!assetId) {
+        showToast("Error: No se identificó el bien a mover.");
+        return;
+      }
+
+      const isNew = Boolean(btnDestModeNew?.classList.contains("is-active")) ||
+        (moverDestinoSelect?.value === "__NEW__") ||
+        (panelNewDestino && !panelNewDestino.hidden && panelNewDestino.style.display !== "none");
+
+      let destinationId = null;
+      let destinationName = "";
+      const reasonVal = moverMotivoInput?.value?.trim() || "";
+      const obsVal = moverObsInput?.value?.trim() || "";
+
+      const origBtnText = btnConfirmarTraslado ? btnConfirmarTraslado.innerHTML : "";
+      if (btnConfirmarTraslado) {
+        btnConfirmarTraslado.disabled = true;
+        btnConfirmarTraslado.innerHTML = `<span aria-hidden="true">⏳</span> Procesando traslado…`;
+      }
+
+      try {
+        if (isNew) {
+          const newName = moverNuevoDestinoInput?.value?.trim() || "";
+          if (!newName || newName.length < 2) {
+            showToast("Ingresá el nombre de la nueva ubicación (mínimo 2 caracteres)");
+            moverNuevoDestinoInput?.focus();
+            if (btnConfirmarTraslado) {
+              btnConfirmarTraslado.disabled = false;
+              btnConfirmarTraslado.innerHTML = origBtnText;
+            }
+            return;
+          }
+
+          // Step 1: Create the new location
+          const createLocResponse = await fetch("/inventory/locations", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Accept": "application/json",
+            },
+            body: JSON.stringify({
+              name: newName,
+              location_type: "FISICA",
+              active: true,
+            }),
+            credentials: "same-origin",
+          });
+
+          if (!createLocResponse.ok) {
+            let errorMsg = "No se pudo crear la nueva ubicación.";
+            try {
+              const errData = await createLocResponse.json();
+              errorMsg = extractApiErrorMessage(errData, errorMsg);
+            } catch (_) {}
+            showToast(`Error: ${errorMsg}`);
+            if (btnConfirmarTraslado) {
+              btnConfirmarTraslado.disabled = false;
+              btnConfirmarTraslado.innerHTML = origBtnText;
+            }
+            return;
+          }
+
+          const createdLoc = await createLocResponse.json();
+          destinationId = createdLoc.id;
+          destinationName = createdLoc.name;
+        } else {
+          const destVal = moverDestinoSelect?.value;
+          if (!destVal || destVal === "__NEW__") {
+            showToast("Seleccione una ubicación de destino (*)");
+            moverDestinoSelect?.focus();
+            if (btnConfirmarTraslado) {
+              btnConfirmarTraslado.disabled = false;
+              btnConfirmarTraslado.innerHTML = origBtnText;
+            }
+            return;
+          }
+          destinationId = Number(destVal);
+          destinationName = moverDestinoSelect.options[moverDestinoSelect.selectedIndex]?.textContent || "la ubicación destino";
+        }
+
+        // Step 2: Transfer the asset to the destination
+        const transferResponse = await fetch(`/inventory/assets/${assetId}/transfers`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+          },
+          body: JSON.stringify({
+            destination_location_id: destinationId,
+            reason: reasonVal || null,
+            observations: obsVal || null,
+          }),
+          credentials: "same-origin",
+        });
+
+        if (!transferResponse.ok) {
+          let errorMsg = "No se pudo trasladar el bien.";
+          try {
+            const errData = await transferResponse.json();
+            errorMsg = extractApiErrorMessage(errData, errorMsg);
+          } catch (_) {}
+          showToast(`Error: ${errorMsg}`);
+          return;
+        }
+
+        closeMoverModal();
+        showToast(`Bien trasladado exitosamente a "${destinationName}".`);
+        await checkApiConnection();
+      } catch (err) {
+        showToast("Error de conexión al trasladar el bien.");
+      } finally {
+        if (btnConfirmarTraslado) {
+          btnConfirmarTraslado.disabled = false;
+          btnConfirmarTraslado.innerHTML = origBtnText;
+        }
+      }
+    });
+  }
+
+  const movSearchInput = document.querySelector("#movimientos-search-input");
+  if (movSearchInput) {
+    movSearchInput.addEventListener("input", (e) => {
+      const q = e.target.value;
+      if (window.DashboardRenderer && typeof window.DashboardRenderer.setMovimientosQuery === "function") {
+        window.DashboardRenderer.setMovimientosQuery(q);
+      }
+    });
+  }
+
+  const movTabs = document.querySelectorAll("#view-movimientos .table-tabs button");
+  movTabs.forEach(btn => {
+    btn.addEventListener("click", () => {
+      movTabs.forEach(b => {
+        b.classList.remove("is-active");
+        b.setAttribute("aria-selected", "false");
+      });
+      btn.classList.add("is-active");
+      btn.setAttribute("aria-selected", "true");
+      const filter = btn.dataset.filter || "all";
+      if (window.DashboardRenderer && typeof window.DashboardRenderer.setMovimientosFilter === "function") {
+        window.DashboardRenderer.setMovimientosFilter(filter);
+      }
+    });
+  });
+
   document.addEventListener("keydown", event => { if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") { event.preventDefault(); globalSearch.focus(); } });
 })();

@@ -24,13 +24,16 @@
   const MODULE_PERMISSIONS = {
     "Inventario general": ["ADMINISTRADOR", "SUPERVISOR", "BOMBERO"],
     "Bienes": ["ADMINISTRADOR", "SUPERVISOR"],
+    "Nuevo bien": ["ADMINISTRADOR", "SUPERVISOR"],
     "Categorías": ["ADMINISTRADOR", "SUPERVISOR"],
+    "Nueva categoría": ["ADMINISTRADOR", "SUPERVISOR"],
     "Ubicaciones": ["ADMINISTRADOR", "SUPERVISOR"],
     "Vehículos": ["ADMINISTRADOR", "SUPERVISOR"],
     "Responsables": ["ADMINISTRADOR", "SUPERVISOR"],
     "Movimientos": ["ADMINISTRADOR", "SUPERVISOR"],
     "Auditoría": ["ADMINISTRADOR"],
     "Reportes": ["ADMINISTRADOR", "SUPERVISOR"],
+    "Invitaciones": ["ADMINISTRADOR", "SUPERVISOR"],
     "Solicitudes": ["ADMINISTRADOR", "SUPERVISOR"],
     "Reemisiones": ["ADMINISTRADOR"],
   };
@@ -101,7 +104,7 @@
         const viewName = button.dataset ? button.dataset.view : button.getAttribute("data-view");
         if (!viewName) return;
 
-        const isAuthorized = canAccessModule(viewName, currentUserRole);
+        const isAuthorized = currentUserRole ? canAccessModule(viewName, currentUserRole) : true;
         const isActive = viewName === activeView;
 
         // Apply authorized/restricted attributes
@@ -143,7 +146,7 @@
      * @returns {boolean} true if navigation was allowed
      */
     function selectView(viewName) {
-      if (!canAccessModule(viewName, currentUserRole)) {
+      if (currentUserRole && !canAccessModule(viewName, currentUserRole)) {
         announce(`Acceso denegado a la sección ${viewName}`, "assertive");
         return false;
       }
