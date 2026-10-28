@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="es-AR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="description" content="Política de Privacidad de FireOps Intelligence — Bomberos. Tratamiento de datos y términos de protección conforme a la Ley 25.326." />
+    <title>Política de Privacidad | Fire Control</title>
+    <link rel="stylesheet" href="/css/registro.css" />
+    <link rel="stylesheet" href="/css/legal.css" />
+  </head>
+  <body>
+    <main class="legal-page">
+      <div class="legal-shell">
+        <header class="legal-topbar">
+          <a class="brand" href="/iniciar-sesion" aria-label="Fire Control, volver a inicio de sesión">
+            <span class="brand-mark" aria-hidden="true">
+              <svg viewBox="0 0 40 48" role="img"><path d="M22.8 2.5c1.8 8.4-4.1 11.3-7.2 16.7-2.2 3.7-1.5 7.1 1.3 9.5-.2-4.4 2.4-7.2 5.8-10 1.1 4.5 5.5 7.2 5.5 13.3 0 7.2-4.1 12.2-8.9 13.3C11.7 44.6 5 39.5 5 31.6c0-8.1 5.4-12.8 10-17.4 3.9-3.8 6.4-7.1 7.8-11.7Z" /></svg>
+            </span>
+            <span class="brand-copy"><strong>Fire Control</strong><span>Bomberos</span></span>
+          </a>
+
+          <nav class="legal-nav-actions" aria-label="Navegación complementaria">
+            <a href="/iniciar-sesion" class="nav-pill-link">← Iniciar sesión</a>
+            <a href="/registro" class="nav-pill-link">Solicitar acceso</a>
+            <a href="/terminos" class="nav-pill-link nav-pill-link--primary">Términos de Uso</a>
+          </nav>
+        </header>
+
+        <article class="legal-card" aria-labelledby="privacy-title">
+          <header class="legal-header">
+            <p class="eyebrow">Marco institucional y protección de datos</p>
+            <h1 id="privacy-title">Política de Privacidad</h1>
+            <div class="legal-meta-bar">
+              <span class="meta-chip">Última actualización: 28 de octubre de 2026</span>
+              <span class="meta-chip meta-chip--accent">Acceso institucional restringido</span>
+              <span class="meta-chip">Uso gratuito sin fines comerciales</span>
+            </div>
+          </header>
+
+          <div class="legal-body">
+            <section aria-labelledby="sec-identificacion">
+              <h2 id="sec-identificacion">1. Identificación y aspectos de responsabilidad técnica</h2>
+              <p>
+                La plataforma de software <strong>FireOps Intelligence — Bomberos</strong> (también identificada como <strong>Fire Control</strong>) es un sistema desarrollado de forma independiente por <strong>Luis Leonidas Fernández</strong>, en su carácter de desarrollador y responsable técnico de la plataforma.
+              </p>
+              <p>
+                El sistema fue concebido y puesto a disposición de manera <strong>gratuita, sin cobro de suscripciones, tarifas ni finalidad comercial</strong>, con el propósito exclusivo de brindar soporte a la gestión interna de inventario, equipamiento y trazabilidad operativa de un único cuartel de bomberos voluntarios de la República Argentina.
+              </p>
+              <div class="callout-card callout-card--teal">
+                <p>
+                  <strong>Diferenciación de roles y responsabilidades:</strong><br />
+                  Luis Leonidas Fernández actúa como desarrollador y administrador técnico del aplicativo, encargándose de la implementación del software, el mantenimiento del código fuente y la configuración de las medidas de seguridad lógica de la plataforma. Por su parte, la administración del cuartel de bomberos voluntarios gestiona operativamente los accesos a la plataforma, evalúa la habilitación de sus integrantes y decide qué información relativa a bienes, equipamiento y vehículos institucionales se incorpora al sistema. Esta delimitación de tareas describe la operatoria real del aplicativo sin prejuzgar la calificación jurídica formal de las partes ni constituir una exoneración general de responsabilidades legales.
+                </p>
+              </div>
+            </section>
+
+            <section aria-labelledby="sec-marco">
+              <h2 id="sec-marco">2. Marco normativo aplicable</h2>
+              <p>
+                El tratamiento de los datos personales en la plataforma se orienta conforme a los principios de legalidad, finalidad, calidad de la información y seguridad consagrados en la <strong>Ley Nacional N° 25.326 de Protección de los Datos Personales</strong> de la República Argentina y su reglamentación. Los términos aquí expuestos describen los mecanismos técnicos vigentes y no constituyen una certificación externa ni una garantía de inmunidad legal o técnica absoluta.
+              </p>
+            </section>
+
+            <section aria-labelledby="sec-datos">
+              <h2 id="sec-datos">3. Datos personales tratados en la plataforma</h2>
+              <p>
+                El sistema recopila y procesa exclusivamente los datos indispensables para la autenticación de usuarios, el control de accesos y el registro de operaciones:
+              </p>
+              <ul>
+                <li>
+                  <strong>Solicitudes de acceso institucional:</strong> Se almacena la dirección de correo electrónico provista por el solicitante, el método de acceso elegido (contraseña o cuenta de Google), la fecha de la solicitud, el estado de revisión (pendiente, aprobada o rechazada) y el identificador de la cuenta administradora que intervino.
+                </li>
+                <li>
+                  <strong>Cuentas de usuario habilitadas:</strong> Para los usuarios cuya solicitud ha sido aprobada, se almacena la dirección de correo electrónico, un nombre visible opcional (<em>display name</em>), el rol asignado dentro del sistema, el estado de habilitación (activo o inactivo) y el mecanismo de verificación de credenciales.
+                </li>
+                <li>
+                  <strong>Credenciales de autenticación:</strong> Las contraseñas no se almacenan en texto plano. Se procesan mediante <strong>Argon2id</strong> para generar un hash criptográfico unidireccional. Su transmisión se realiza mediante conexiones protegidas con HTTPS/TLS. En caso de utilizar inicio de sesión con Google, no se almacena ninguna contraseña, conservándose únicamente el identificador único de sujeto (<em>google_sub</em>) provisto por Google.
+                </li>
+                <li>
+                  <strong>Invitaciones con token temporal:</strong> Cuando un administrador aprueba una solicitud, se genera un enlace de registro con un token unívoco. En la base de datos se almacena el resumen criptográfico <strong>SHA-256</strong> del token, asegurando que el token original no pueda reconstruirse desde el servidor. Dichas invitaciones tienen un plazo de validez operativa de 48 horas.
+                </li>
+                <li>
+                  <strong>Trazabilidad de movimientos de inventario:</strong> En el módulo de inventario, se asocia el identificador del usuario responsable (<em>usuario_id</em>) a cada registro de alta, baja, traslado o reasignación de equipamiento institucional, junto con la fecha del movimiento y las observaciones operativas registradas.
+                </li>
+                <li>
+                  <strong>Auditoría de cambios en entidades:</strong> El sistema cuenta con un registro específico de auditoría técnica (<em>auditoria_cambios</em>) que registra modificaciones estructurales sobre bienes, usuarios o ubicaciones, capturando el usuario interviniente, la fecha, y los valores previos y nuevos del registro para garantizar la rendición de cuentas operativa.
+                </li>
+              </ul>
+            </section>
+
+            <section aria-labelledby="sec-proveedores">
+              <h2 id="sec-proveedores">4. Proveedores tecnológicos y comunicación de datos</h2>
+              <p>
+                Para su funcionamiento, la plataforma utiliza servicios de infraestructura tecnológica y servicios de Google vinculados con la autenticación y el envío de notificaciones. No comercializa datos personales ni los comunica con fines publicitarios. Cualquier otra comunicación de datos deberá contar con una base legal aplicable.
+              </p>
+              <p>
+                Los servicios tecnológicos utilizados comprenden:
+              </p>
+              <ul>
+                <li>
+                  <strong>Alojamiento e infraestructura:</strong> Servidores donde se ejecutan la aplicación en contenedores y la base de datos PostgreSQL en un entorno aislado con acceso restringido.
+                </li>
+                <li>
+                  <strong>Google LLC:</strong> Utilizado para el mecanismo de autenticación federada (Google Sign-In) y la emisión de notificaciones operativas a través de la API de Gmail.
+                </li>
+              </ul>
+            </section>
+
+            <section aria-labelledby="sec-google">
+              <h2 id="sec-google">5. Inicio de sesión con Google y notificaciones transaccionales</h2>
+              <h3>Autenticación de los usuarios (Google OAuth 2.0)</h3>
+              <p>
+                La plataforma ofrece la posibilidad de iniciar sesión o solicitar acceso mediante una cuenta de Google.
+              </p>
+              <p>
+                Para autenticar al usuario, la plataforma utiliza datos básicos de identidad proporcionados por Google, como su dirección de correo electrónico, nombre de perfil e identificador único de cuenta. El proceso también utiliza información técnica necesaria para completar de forma segura la autenticación.
+              </p>
+              <ul>
+                <li>El inicio de sesión solicita los permisos de identidad básica: <code>openid profile email</code>.</li>
+                <li>La plataforma <strong>no solicita ni tiene acceso a correos electrónicos privados, mensajes de Gmail, libreta de contactos ni archivos de Google Drive</strong> de los bomberos o solicitantes.</li>
+              </ul>
+
+              <h3>Notificaciones del sistema mediante Gmail API</h3>
+              <p>
+                El sistema contempla la integración con la API de Google Gmail con la finalidad de gestionar notificaciones operativas y transaccionales del servicio:
+              </p>
+              <ul>
+                <li>Avisar a la administración ante la recepción de una nueva solicitud de acceso.</li>
+                <li>Remitir al solicitante aprobado el correo con el enlace seguro de invitación para completar el alta en el sistema.</li>
+              </ul>
+              <p>
+                El permiso <code>gmail.send</code> corresponde al mecanismo de autorización configurado para la cuenta remitente del sistema, <strong>no a los permisos que se solicitan a cada usuario durante su inicio de sesión</strong>. Este canal se orienta a fines puramente operativos, sin emitir publicidad ni comunicaciones de difusión masiva. Esta descripción detalla la finalidad de la integración técnica y no presupone verificación previa o aval comercial por parte de Google LLC.
+              </p>
+            </section>
+
+            <section aria-labelledby="sec-conservacion">
+              <h2 id="sec-conservacion">6. Conservación y ciclo de vida de los datos</h2>
+              <p>
+                La información registrada se almacena en la base de datos PostgreSQL bajo los siguientes criterios técnicos:
+              </p>
+              <ul>
+                <li>
+                  <strong>Cuentas y solicitudes:</strong> Los registros de solicitudes y cuentas de usuario se conservan en la base de datos para preservar la trazabilidad de accesos y la integridad referencial. La eventual baja de un integrante implica la desactivación administrativa de su cuenta, sin que ello ejecute una purga física inmediata de la base de datos.
+                </li>
+                <li>
+                  <strong>Movimientos de inventario y auditoría:</strong> Los movimientos de bienes y las auditorías de cambios se conservan de forma persistente con fines de control interno y rendición de cuentas operativa y patrimonial de la institución.
+                </li>
+                <li>
+                  <strong>Invitaciones temporales:</strong> La caducidad de una invitación transcurridas sus 48 horas de vigencia inhabilita su validez funcional para crear una cuenta, pero la constancia técnica de emisión y estado se preserva en la base de datos como comprobante de auditoría.
+                </li>
+              </ul>
+              <p>
+                Actualmente el aplicativo no cuenta con rutinas automáticas de borrado programado ni purga periódica. La conservación persistente obedece a razones de control operativo y no constituye una política institucional de custodia definitiva. Las solicitudes de actualización o supresión de datos se evaluarán y atenderán conforme a la normativa aplicable a través del canal de privacidad.
+              </p>
+            </section>
+
+            <section aria-labelledby="sec-cookies">
+              <h2 id="sec-cookies">7. Gestión técnica de sesiones y cookies</h2>
+              <p>
+                La plataforma utiliza únicamente cookies técnicas estrictamente necesarias para el funcionamiento seguro de las sesiones:
+              </p>
+              <ul>
+                <li>
+                  <code>fire_control_access</code>: Cookie técnica de sesión que almacena un token firmado digitalmente (JWT HS256) con el identificador del usuario. Tiene una validez de <strong>30 minutos</strong> y viaja configurada con atributos de seguridad: <code>HttpOnly</code> (que restringe el acceso desde scripts del lado del cliente como medida de mitigación frente a ataques XSS), <code>SameSite=Lax</code> (que colabora en reducir riesgos de solicitudes no autorizadas entre sitios) y <code>Secure</code> en entornos de producción bajo HTTPS.
+                </li>
+                <li>
+                  <code>fire_control_google_flow</code>: Cookie técnica temporal de seguridad (duración de <strong>5 minutos</strong>) utilizada en el protocolo PKCE durante el flujo de inicio de sesión con Google para prevenir ataques de interceptación o suplantación en la redirección.
+                </li>
+              </ul>
+              <p>
+                La plataforma <strong>no implementa cookies publicitarias</strong>, herramientas de analítica invasiva ni píxeles de seguimiento comercial.
+              </p>
+            </section>
+
+            <section aria-labelledby="sec-seguridad">
+              <h2 id="sec-seguridad">8. Medidas de seguridad técnica implementadas</h2>
+              <p>
+                El sistema implementa medidas orientadas a reducir riesgos de accesos no autorizados y proteger la integridad de los datos:
+              </p>
+              <ul>
+                <li>Cifrado de las comunicaciones en tránsito mediante HTTPS / TLS en el servidor de producción.</li>
+                <li>Generación de resúmenes criptográficos unidireccionales de contraseñas con Argon2id con protección contra ataques de temporización, evitando su almacenamiento en texto claro.</li>
+                <li>Almacenamiento de tokens de invitación como resúmenes criptográficos SHA-256 en reposo.</li>
+                <li>Limitadores de tasa (<em>rate limiting</em>) en memoria y por dirección IP como medida de mitigación frente a abusos de tráfico e intentos automatizados de fuerza bruta.</li>
+                <li>Cabeceras restrictivas (<code>Cache-Control: no-store</code>) en pantallas de acceso y autenticación para evitar que los navegadores retengan copias locales de datos sensibles.</li>
+              </ul>
+              <p>
+                Estas medidas constituyen mecanismos de defensa técnica en profundidad, reconociendo que ningún sistema informático puede garantizar una seguridad e inviolabilidad absoluta.
+              </p>
+            </section>
+
+            <section aria-labelledby="sec-derechos">
+              <h2 id="sec-derechos">9. Derechos del titular de los datos personales (ARCO)</h2>
+              <p>
+                De acuerdo con lo previsto por la Ley N° 25.326, el titular de los datos personales tiene derecho a acceder a ellos en forma gratuita en intervalos no inferiores a seis meses, salvo que acredite un interés legítimo al efecto, así como a solicitar su actualización, rectificación o supresión.
+              </p>
+              <p>
+                Para consultas técnicas sobre la información tratada por el sistema o para canalizar solicitudes de actualización de datos, el usuario puede comunicarse al correo oficial de contacto:
+              </p>
+              <div class="callout-card callout-card--teal">
+                <p>
+                  <strong>Contacto para privacidad y soporte técnico:</strong><br />
+                  Correo electrónico: <a href="mailto:fernandezluis303@gmail.com">fernandezluis303@gmail.com</a><br />
+                  Asunto sugerido: <em>Privacidad — FireOps Intelligence</em>
+                </p>
+              </div>
+              <div class="callout-card">
+                <p>
+                  <strong>Autoridad de control:</strong><br />
+                  La <strong>Agencia de Acceso a la Información Pública (AAIP)</strong>, en su carácter de Órgano de Control de la Ley N° 25.326, tiene la atribución de atender las denuncias y reclamos que se interpongan con relación al incumplimiento de las normas sobre protección de datos personales. Sitio web oficial: <a href="https://www.argentina.gob.ar/aaip" target="_blank" rel="noopener noreferrer">www.argentina.gob.ar/aaip</a>.
+                </p>
+              </div>
+            </section>
+
+            <section aria-labelledby="sec-modificaciones">
+              <h2 id="sec-modificaciones">10. Actualizaciones de la política</h2>
+              <p>
+                Esta política podrá ser revisada cuando se incorporen nuevas funciones al aplicativo o para adecuarse a modificaciones técnicas o normativas. Cualquier cambio será publicado en esta misma dirección web con indicación de la fecha de última actualización.
+              </p>
+            </section>
+          </div>
+
+          <footer class="legal-footer-bar">
+            <span>© 2026 Fire Control · FireOps Intelligence</span>
+            <div class="legal-footer-links">
+              <a href="/iniciar-sesion">Iniciar sesión</a>
+              <span aria-hidden="true">·</span>
+              <a href="/registro">Solicitar acceso</a>
+              <span aria-hidden="true">·</span>
+              <a href="/terminos">Términos y Condiciones</a>
+            </div>
+          </footer>
+        </article>
+      </div>
+    </main>
+  </body>
+</html>

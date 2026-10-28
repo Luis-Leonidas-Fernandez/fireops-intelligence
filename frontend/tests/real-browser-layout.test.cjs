@@ -23,6 +23,12 @@ function startServer() {
 
     if (parsedUrl.pathname === '/registro') {
       filePath = path.join(FRONTEND_DIR, 'pages/registro/index.html');
+    } else if (parsedUrl.pathname === '/iniciar-sesion') {
+      filePath = path.join(FRONTEND_DIR, 'pages/iniciar-sesion/index.html');
+    } else if (parsedUrl.pathname === '/privacidad') {
+      filePath = path.join(FRONTEND_DIR, 'pages/privacidad/index.html');
+    } else if (parsedUrl.pathname === '/terminos') {
+      filePath = path.join(FRONTEND_DIR, 'pages/terminos/index.html');
     }
 
     if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
@@ -179,6 +185,119 @@ test('Real Browser (Google Chrome 154 Headless): verifies computed styles and mu
     assert.equal(resB.panelDisplay, 'none', 'Estado B: Request panel computed display MUST be none');
     assert.equal(resB.formDisplay, 'grid', 'Estado B: Registration form computed display MUST be grid');
     assert.equal(resB.titleText, 'Crear cuenta', 'Estado B: Title must be "Crear cuenta"');
+
+    // 3. Check footer legal links on /registro
+    const footerLinksRegistro = await cdp.send('Runtime.evaluate', {
+      expression: `(() => {
+        const priv = document.querySelector('footer.form-footer a[href="/privacidad"]');
+        const term = document.querySelector('footer.form-footer a[href="/terminos"]');
+        return {
+          privExists: Boolean(priv),
+          termExists: Boolean(term),
+          privText: priv ? priv.textContent.trim() : null,
+          termText: term ? term.textContent.trim() : null,
+        };
+      })()`,
+      returnByValue: true,
+    });
+    assert.equal(footerLinksRegistro.result.value.privExists, true, 'Footer must link to /privacidad');
+    assert.equal(footerLinksRegistro.result.value.termExists, true, 'Footer must link to /terminos');
+
+    // 4. Navigate to /iniciar-sesion and check footer legal links
+    await cdp.send('Page.navigate', { url: `http://127.0.0.1:${port}/iniciar-sesion` });
+    await new Promise((r) => setTimeout(r, 200));
+
+    const footerLinksLogin = await cdp.send('Runtime.evaluate', {
+      expression: `(() => {
+        const priv = document.querySelector('footer.form-footer a[href="/privacidad"]');
+        const term = document.querySelector('footer.form-footer a[href="/terminos"]');
+        return {
+          privExists: Boolean(priv),
+          termExists: Boolean(term),
+        };
+      })()`,
+      returnByValue: true,
+    });
+    assert.equal(footerLinksLogin.result.value.privExists, true, 'Login footer must link to /privacidad');
+    assert.equal(footerLinksLogin.result.value.termExists, true, 'Login footer must link to /terminos');
+
+    // 5. Navigate to /privacidad and verify responsive layout
+    await cdp.send('Emulation.setDeviceMetricsOverride', {
+      width: 375,
+      height: 667,
+      deviceScaleFactor: 2,
+      mobile: true,
+    });
+    await cdp.send('Page.navigate', { url: `http://127.0.0.1:${port}/privacidad` });
+    await new Promise((r) => setTimeout(r, 200));
+
+    const privPageData = await cdp.send('Runtime.evaluate', {
+      expression: `(() => {
+        const title = document.title;
+        const bodyText = document.body.innerText;
+        const scrollWidth = document.documentElement.scrollWidth;
+        const innerWidth = window.innerWidth;
+        const hasOverflow = scrollWidth > innerWidth;
+        return {
+          title,
+          hasDeveloper: bodyText.includes('Luis Leonidas Fernández'),
+          hasContactEmail: bodyText.includes('fernandezluis303@gmail.com'),
+          hasAAIP: bodyText.includes('Agencia de Acceso a la Información Pública'),
+          hasArgon2id: bodyText.includes('Argon2id'),
+          hasNoPlaceholders: !bodyText.includes('[Completar]'),
+          hasNoINRI: !bodyText.includes('INRI Servicios Digitales'),
+          scrollWidth,
+          innerWidth,
+          hasOverflow,
+        };
+      })()`,
+      returnByValue: true,
+    });
+
+    const privRes = privPageData.result.value;
+    assert.equal(privRes.title, 'Política de Privacidad | Fire Control');
+    assert.equal(privRes.hasDeveloper, true, 'Must identify Luis Leonidas Fernández');
+    assert.equal(privRes.hasContactEmail, true, 'Must include contact email');
+    assert.equal(privRes.hasAAIP, true, 'Must cite AAIP');
+    assert.equal(privRes.hasArgon2id, true, 'Must mention Argon2id');
+    assert.equal(privRes.hasNoPlaceholders, true, 'Must NOT contain [Completar]');
+    assert.equal(privRes.hasNoINRI, true, 'Must NOT mention INRI Servicios Digitales');
+    assert.equal(privRes.hasOverflow, false, `Mobile view must not overflow horizontally (${privRes.scrollWidth} > ${privRes.innerWidth})`);
+
+    // 6. Navigate to /terminos and verify responsive layout
+    await cdp.send('Page.navigate', { url: `http://127.0.0.1:${port}/terminos` });
+    await new Promise((r) => setTimeout(r, 200));
+
+    const termsPageData = await cdp.send('Runtime.evaluate', {
+      expression: `(() => {
+        const title = document.title;
+        const bodyText = document.body.innerText;
+        const scrollWidth = document.documentElement.scrollWidth;
+        const innerWidth = window.innerWidth;
+        const hasOverflow = scrollWidth > innerWidth;
+        return {
+          title,
+          hasDeveloper: bodyText.includes('Luis Leonidas Fernández'),
+          hasEmergencyWarning: bodyText.includes('100 o 911'),
+          has48Hours: bodyText.includes('48 horas'),
+          hasNoPlaceholders: !bodyText.includes('[Completar]'),
+          hasNoINRI: !bodyText.includes('INRI Servicios Digitales'),
+          scrollWidth,
+          innerWidth,
+          hasOverflow,
+        };
+      })()`,
+      returnByValue: true,
+    });
+
+    const termsRes = termsPageData.result.value;
+    assert.equal(termsRes.title, 'Términos y Condiciones | Fire Control');
+    assert.equal(termsRes.hasDeveloper, true, 'Must identify Luis Leonidas Fernández');
+    assert.equal(termsRes.hasEmergencyWarning, true, 'Must warn that it does not replace 100/911');
+    assert.equal(termsRes.has48Hours, true, 'Must note 48h expiration for invitations');
+    assert.equal(termsRes.hasNoPlaceholders, true, 'Must NOT contain [Completar]');
+    assert.equal(termsRes.hasNoINRI, true, 'Must NOT mention INRI Servicios Digitales');
+    assert.equal(termsRes.hasOverflow, false, `Mobile view must not overflow horizontally (${termsRes.scrollWidth} > ${termsRes.innerWidth})`);
 
     cdp.ws.close();
   } finally {

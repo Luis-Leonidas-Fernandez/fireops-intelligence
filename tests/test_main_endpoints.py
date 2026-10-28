@@ -82,6 +82,8 @@ async def test_registration_page_is_separate_from_dashboard() -> None:
     assert "El inicio de sesión todavía no está disponible" not in page.text
     assert 'class="submit-button" type="submit"' in page.text
     assert '<a href="/iniciar-sesion">Iniciar sesión</a>' in page.text
+    assert '<a href="/privacidad">Privacidad</a>' in page.text
+    assert '<a href="/terminos">Términos</a>' in page.text
     assert '<dialog id="auth-error-dialog"' in page.text
     assert "event.preventDefault()" in shared_script.text
     assert "Atención de emergencias 24 hs." in page.text
@@ -112,6 +114,8 @@ async def test_sign_in_page_is_separate_from_registration() -> None:
     assert 'type="email"' in page.text
     assert 'type="password"' in page.text
     assert '<a href="/registro">Crear cuenta</a>' in page.text
+    assert '<a href="/privacidad">Privacidad</a>' in page.text
+    assert '<a href="/terminos">Términos</a>' in page.text
     assert 'href="/css/registro.css"' in page.text
     assert 'src="/js/iniciar-sesion.js"' in page.text
     assert '<dialog id="auth-error-dialog"' in page.text
@@ -223,3 +227,57 @@ async def test_local_frontend_can_preflight_categories_get() -> None:
 
     assert response.status_code == 200
     assert response.headers["access-control-allow-origin"] == "http://127.0.0.1:5500"
+
+
+@pytest.mark.asyncio
+async def test_privacy_page_is_publicly_accessible() -> None:
+    transport = ASGITransport(app=app)
+
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/privacidad")
+        stylesheet = await client.get("/css/legal.css")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
+    assert response.headers["cache-control"] == "no-store"
+    assert stylesheet.status_code == 200
+
+    text = response.text
+    assert "Política de Privacidad | Fire Control" in text
+    assert "Luis Leonidas Fernández" in text
+    assert "fernandezluis303@gmail.com" in text
+    assert "Ley Nacional N° 25.326" in text
+    assert "Agencia de Acceso a la Información Pública" in text
+    assert "Argon2id" in text
+    assert "fire_control_access" in text
+    assert "fire_control_google_flow" in text
+    assert '<a href="/terminos"' in text
+    assert '<a href="/iniciar-sesion"' in text
+    assert "[Completar]" not in text
+    assert "INRI Servicios Digitales" not in text
+
+@pytest.mark.asyncio
+async def test_terms_page_is_publicly_accessible() -> None:
+    transport = ASGITransport(app=app)
+
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/terminos")
+        stylesheet = await client.get("/css/legal.css")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
+    assert response.headers["cache-control"] == "no-store"
+    assert stylesheet.status_code == 200
+
+    text = response.text
+    assert "Términos y Condiciones | Fire Control" in text
+    assert "Luis Leonidas Fernández" in text
+    assert "fernandezluis303@gmail.com" in text
+    assert "No es un sistema de despacho ni de atención de emergencias" in text
+    assert "líneas 100 o 911" in text
+    assert "48 horas" in text
+    assert "auditoria_cambios" in text
+    assert '<a href="/privacidad"' in text
+    assert '<a href="/iniciar-sesion"' in text
+    assert "[Completar]" not in text
+    assert "INRI Servicios Digitales" not in text

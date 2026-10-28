@@ -66,9 +66,14 @@ app = FastAPI(
 async def prevent_stale_frontend_assets(request: Request, call_next):
     response = await call_next(request)
     path = request.url.path
-    if path in {"/", "/registro", "/iniciar-sesion", "/solicitudes"} or path.startswith(
-        ("/css/", "/js/", "/auth/")
-    ):
+    if path in {
+        "/",
+        "/registro",
+        "/iniciar-sesion",
+        "/solicitudes",
+        "/privacidad",
+        "/terminos",
+    } or path.startswith(("/css/", "/js/", "/auth/")):
         response.headers["Cache-Control"] = "no-store"
     return response
 
@@ -139,6 +144,16 @@ async def review_page(
 @app.get("/iniciar-sesion", include_in_schema=False)
 async def sign_in_page() -> FileResponse:
     return FileResponse(frontend_dir / "pages" / "iniciar-sesion" / "index.html")
+
+
+@app.get("/privacidad", include_in_schema=False)
+async def privacy_page() -> FileResponse:
+    return FileResponse(frontend_dir / "pages" / "privacidad" / "index.html")
+
+
+@app.get("/terminos", include_in_schema=False)
+async def terms_page() -> FileResponse:
+    return FileResponse(frontend_dir / "pages" / "terminos" / "index.html")
 
 
 @app.get("/health")

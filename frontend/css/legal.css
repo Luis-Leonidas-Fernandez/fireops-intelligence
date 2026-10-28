@@ -1,0 +1,282 @@
+/* ==========================================================================
+   FIROPS INTELLIGENCE / FIRE CONTROL — HOJA DE ESTILOS DE PÁGINAS LEGALES
+   Páginas: /privacidad y /terminos
+   Diseño sobrio, accesible y responsivo. Alineado con tokens de registro.css.
+   ========================================================================== */
+
+.legal-page {
+  display: flex;
+  min-height: 100vh;
+  min-height: 100dvh;
+  flex-direction: column;
+  padding: clamp(20px, 4vw, 48px) clamp(16px, 3vw, 32px);
+}
+
+.legal-shell {
+  width: min(100%, 880px);
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(20px, 3vw, 28px);
+}
+
+.legal-topbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 4px;
+}
+
+.legal-nav-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.nav-pill-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-soft, #cbd5e1);
+  font-size: 13px;
+  font-weight: 550;
+  text-decoration: none;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.nav-pill-link:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.22);
+  color: #fff;
+}
+
+.nav-pill-link:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--accent, #E53935) 70%, white);
+  outline-offset: 2px;
+}
+
+.nav-pill-link--primary {
+  background: rgba(229, 57, 53, 0.14);
+  border-color: rgba(229, 57, 53, 0.35);
+  color: #fff;
+}
+
+.nav-pill-link--primary:hover {
+  background: rgba(229, 57, 53, 0.24);
+  border-color: rgba(229, 57, 53, 0.5);
+}
+
+.legal-card {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.09));
+  border-radius: var(--radius-card, 28px);
+  background: var(--panel, #0a0d19);
+  box-shadow: 0 32px 90px rgba(0, 0, 0, 0.48);
+  padding: clamp(28px, 5vw, 56px);
+}
+
+.legal-header {
+  margin-bottom: clamp(28px, 4vw, 36px);
+  padding-bottom: 24px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.legal-header .eyebrow {
+  margin: 0 0 10px;
+  color: var(--teal, #4fd4ba);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+.legal-header h1 {
+  margin: 0 0 14px;
+  font-family: var(--font-display, "Avenir Next", "Segoe UI", system-ui, sans-serif);
+  font-size: clamp(26px, 4.5vw, 36px);
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  color: #fff;
+}
+
+.legal-meta-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.meta-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 12px;
+  color: var(--muted, #969daf);
+}
+
+.meta-chip--accent {
+  background: rgba(79, 212, 186, 0.08);
+  border-color: rgba(79, 212, 186, 0.22);
+  color: var(--teal, #4fd4ba);
+}
+
+.legal-body {
+  color: #cbd5e1;
+  font-size: 14.5px;
+  line-height: 1.72;
+}
+
+.legal-body h2 {
+  margin: 36px 0 14px;
+  font-family: var(--font-display, "Avenir Next", "Segoe UI", system-ui, sans-serif);
+  font-size: clamp(17px, 2.5vw, 20px);
+  font-weight: 650;
+  color: #fff;
+  letter-spacing: -0.01em;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.legal-body h2::before {
+  content: "";
+  display: inline-block;
+  width: 4px;
+  height: 18px;
+  border-radius: 2px;
+  background: var(--accent, #E53935);
+  flex-shrink: 0;
+}
+
+.legal-body h3 {
+  margin: 22px 0 10px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #e2e8f0;
+}
+
+.legal-body p {
+  margin: 0 0 16px;
+}
+
+.legal-body ul,
+.legal-body ol {
+  margin: 0 0 18px;
+  padding-left: 24px;
+}
+
+.legal-body li {
+  margin-bottom: 8px;
+  line-height: 1.65;
+}
+
+.legal-body strong {
+  color: #fff;
+  font-weight: 600;
+}
+
+.legal-body a {
+  color: var(--teal, #4fd4ba);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  transition: color 0.15s ease;
+}
+
+.legal-body a:hover {
+  color: #fff;
+}
+
+.legal-body a:focus-visible {
+  outline: 2px solid var(--teal, #4fd4ba);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.callout-card {
+  margin: 24px 0;
+  padding: 18px 22px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+}
+
+.callout-card--teal {
+  background: rgba(79, 212, 186, 0.06);
+  border-color: rgba(79, 212, 186, 0.24);
+}
+
+.callout-card--teal strong {
+  color: var(--teal, #4fd4ba);
+}
+
+.callout-card--accent {
+  background: rgba(229, 57, 53, 0.06);
+  border-color: rgba(229, 57, 53, 0.22);
+}
+
+.callout-card--accent strong {
+  color: var(--accent-hover, #F0524E);
+}
+
+.callout-card p:last-child {
+  margin-bottom: 0;
+}
+
+.legal-footer-bar {
+  margin-top: 40px;
+  padding-top: 24px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 13px;
+  color: var(--muted, #969daf);
+}
+
+.legal-footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.legal-footer-links a {
+  color: var(--text-soft, #cbd5e1);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.legal-footer-links a:hover {
+  color: #fff;
+}
+
+@media (max-width: 640px) {
+  .legal-topbar,
+  .legal-footer-bar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .legal-nav-actions {
+    width: 100%;
+  }
+
+  .nav-pill-link {
+    flex: 1;
+    justify-content: center;
+  }
+}
