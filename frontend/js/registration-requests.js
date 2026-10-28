@@ -4,41 +4,81 @@
   const requestPanel = document.querySelector("#registration-request-panel");
   const registrationForm = document.querySelector("#registration-form");
   if (requestPanel && registrationForm) {
-    const token = new URLSearchParams((window.location.hash || "").slice(1)).get("invite");
-    requestPanel.hidden = Boolean(token);
-    registrationForm.hidden = !token;
     const title = document.querySelector("#registration-title");
-    if (title && !token) title.textContent = "Solicitar registro";
+    const subtitle = document.querySelector("#registration-subtitle");
     const status = document.querySelector("#request-status");
-    if (new URLSearchParams(window.location.search).get("request_status") === "received") {
-      status.textContent = "Si corresponde, recibirás novedades por correo.";
-      status.hidden = false;
-      window.history.replaceState(null, "", window.location.pathname);
-    }
-    requestPanel.querySelector("#registration-request-form").addEventListener("submit", async (event) => {
-      event.preventDefault();
-      const form = event.currentTarget;
-      const button = form.querySelector("button[type=submit]");
-      button.disabled = true;
-      try {
-        const response = await fetch("/auth/registration-requests", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "same-origin",
-          body: JSON.stringify({ email: form.querySelector("#request-email").value.trim() }),
-        });
-        if (!response.ok) throw new Error("request_failed");
-        status.textContent = "Si corresponde, recibirás novedades por correo.";
-      } catch (_error) {
-        status.textContent = "No se pudo enviar la solicitud. Inténtalo nuevamente.";
-      } finally {
-        status.hidden = false;
-        button.disabled = false;
+
+    function updateFormVisibility() {
+      const token = new URLSearchParams((window.location.hash || "").slice(1)).get("invite");
+      const hasInvite = Boolean(token);
+
+      requestPanel.hidden = hasInvite;
+      registrationForm.hidden = !hasInvite;
+
+      if (hasInvite) {
+        if (title) title.textContent = "Crear cuenta";
+        if (subtitle) subtitle.textContent = "Usá el enlace de invitación para crear tu cuenta.";
+      } else {
+        if (title) title.textContent = "Solicitar acceso";
+        if (subtitle) subtitle.textContent = "Envía tu correo para solicitar el registro. Un administrador revisará la solicitud.";
       }
-    });
-    requestPanel.querySelector("#google-request-button").addEventListener("click", () => {
-      window.location.assign("/auth/google/start?flow=signin&source=request");
-    });
+    }
+
+    updateFormVisibility();
+    if (typeof window.addEventListener === "function") {
+      window.addEventListener("hashchange", updateFormVisibility);
+    }
+
+    if (new URLSearchParams(window.location.search).get("request_status") === "received") {
+      if (status) {
+        status.textContent = "Si corresponde, recibirás novedades por correo.";
+        status.dataset.state = "success";
+        status.hidden = false;
+      }
+      if (window.history && typeof window.history.replaceState === "function") {
+        window.history.replaceState(null, "", window.location.pathname);
+      }
+    }
+
+    const requestForm = requestPanel.querySelector("#registration-request-form");
+    if (requestForm) {
+      requestForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const form = event.currentTarget;
+        const button = form.querySelector("button[type=submit]");
+        const emailInput = form.querySelector("#request-email");
+        if (button) button.disabled = true;
+        try {
+          const response = await fetch("/auth/registration-requests", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "same-origin",
+            body: JSON.stringify({ email: (emailInput?.value || "").trim() }),
+          });
+          if (!response.ok) throw new Error("request_failed");
+          if (status) {
+            status.textContent = "Si corresponde, recibirás novedades por correo.";
+            status.dataset.state = "success";
+          }
+        } catch (_error) {
+          if (status) {
+            status.textContent = "No se pudo enviar la solicitud. Inténtalo nuevamente.";
+            delete status.dataset.state;
+          }
+        } finally {
+          if (status) status.hidden = false;
+          if (button) button.disabled = false;
+        }
+      });
+    }
+
+    const googleBtn = requestPanel.querySelector("#google-request-button");
+    if (googleBtn) {
+      googleBtn.addEventListener("click", () => {
+        googleBtn.disabled = true;
+        window.location.assign("/auth/google/start?flow=signin&source=request");
+      });
+    }
   }
 
   const list = document.querySelector("#pending-requests");

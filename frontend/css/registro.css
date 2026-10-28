@@ -173,6 +173,14 @@ h1 {
   line-height: 1.6;
 }
 
+/* Localized hidden enforcement: ensures elements with [hidden] are never displayed
+   even when author styles define display: grid or display: flex on those elements. */
+[hidden],
+form[hidden],
+section[hidden] {
+  display: none !important;
+}
+
 form {
   display: grid;
   gap: 18px;
@@ -377,25 +385,65 @@ form {
 .modal-close:hover { background: var(--accent-hover); }
 .modal-close:focus-visible { outline: 3px solid white; outline-offset: 3px; }
 
-.google-button {
-  display: grid;
-  min-height: 48px;
-  place-items: center;
-  border: 1px solid #e5e7eb;
-  border-radius: var(--radius-control);
-  background: #fff;
-  cursor: pointer;
-  transition: background 160ms ease, border-color 160ms ease;
+.auth-divider {
+  display: flex;
+  align-items: center;
+  margin: 18px 0;
+  color: var(--muted);
+  font-size: 13px;
 }
 
-.google-button:hover {
-  border-color: #d1d5db;
+.auth-divider::before,
+.auth-divider::after {
+  content: "";
+  flex: 1;
+  border-bottom: 1px solid var(--border);
+}
+
+.auth-divider span {
+  padding: 0 12px;
+  text-transform: lowercase;
+}
+
+.google-button {
+  display: flex;
+  width: 100%;
+  min-height: 52px;
+  padding: 0 16px;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  border: 1px solid #d1d5db;
+  border-radius: var(--radius-control);
+  background: #ffffff;
+  color: #1f2937;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  transition: background 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.google-button:hover:not(:disabled) {
+  border-color: #9ca3af;
+  background: #f9fafb;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+}
+
+.google-button:active:not(:disabled) {
   background: #f3f4f6;
+  transform: translateY(1px);
+}
+
+.google-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
 }
 
 .google-button svg {
   width: 22px;
   height: 22px;
+  flex-shrink: 0;
 }
 
 .sign-in-copy {
