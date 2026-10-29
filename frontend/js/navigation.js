@@ -33,8 +33,9 @@
     "Movimientos": ["ADMINISTRADOR", "SUPERVISOR"],
     "Auditoría": ["ADMINISTRADOR"],
     "Reportes": ["ADMINISTRADOR", "SUPERVISOR"],
-    "Invitaciones": ["ADMINISTRADOR", "SUPERVISOR"],
-    "Solicitudes": ["ADMINISTRADOR", "SUPERVISOR"],
+    "Invitaciones": ["ADMINISTRADOR"],
+    "Gestión de accesos": ["ADMINISTRADOR"],
+    "Solicitudes": ["ADMINISTRADOR"],
     "Reemisiones": ["ADMINISTRADOR"],
   };
 

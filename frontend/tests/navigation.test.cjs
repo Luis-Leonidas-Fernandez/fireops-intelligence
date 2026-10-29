@@ -76,22 +76,24 @@ test("Navigation: verifies role capability matrix", () => {
   assert.equal(nav.canAccessModule("Reemisiones", "BOMBERO"), false);
   assert.equal(nav.canAccessModule("Auditoría", "BOMBERO"), false);
 
-  // SUPERVISOR (gestión de inventario y revisión de solicitudes, sin reemisión ni auditoría)
+  // SUPERVISOR (gestión de inventario, sin gestión de accesos, solicitudes, invitaciones, reemisión ni auditoría)
   assert.equal(nav.canAccessModule("Inventario general", "SUPERVISOR"), true);
   assert.equal(nav.canAccessModule("Bienes", "SUPERVISOR"), true);
   assert.equal(nav.canAccessModule("Categorías", "SUPERVISOR"), true);
   assert.equal(nav.canAccessModule("Nueva categoría", "SUPERVISOR"), true);
   assert.equal(nav.canAccessModule("Ubicaciones", "SUPERVISOR"), true);
-  assert.equal(nav.canAccessModule("Invitaciones", "SUPERVISOR"), true);
-  assert.equal(nav.canAccessModule("Solicitudes", "SUPERVISOR"), true);
+  assert.equal(nav.canAccessModule("Invitaciones", "SUPERVISOR"), false);
+  assert.equal(nav.canAccessModule("Gestión de accesos", "SUPERVISOR"), false);
+  assert.equal(nav.canAccessModule("Solicitudes", "SUPERVISOR"), false);
   assert.equal(nav.canAccessModule("Reemisiones", "SUPERVISOR"), false);
   assert.equal(nav.canAccessModule("Auditoría", "SUPERVISOR"), false);
 
-  // ADMINISTRADOR (acceso total a inventario, revisión, reemisión y auditoría)
+  // ADMINISTRADOR (acceso total a inventario, gestión de accesos, revisión, reemisión y auditoría)
   assert.equal(nav.canAccessModule("Inventario general", "ADMINISTRADOR"), true);
   assert.equal(nav.canAccessModule("Bienes", "ADMINISTRADOR"), true);
   assert.equal(nav.canAccessModule("Nueva categoría", "ADMINISTRADOR"), true);
   assert.equal(nav.canAccessModule("Invitaciones", "ADMINISTRADOR"), true);
+  assert.equal(nav.canAccessModule("Gestión de accesos", "ADMINISTRADOR"), true);
   assert.equal(nav.canAccessModule("Solicitudes", "ADMINISTRADOR"), true);
   assert.equal(nav.canAccessModule("Reemisiones", "ADMINISTRADOR"), true);
   assert.equal(nav.canAccessModule("Auditoría", "ADMINISTRADOR"), true);

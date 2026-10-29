@@ -335,6 +335,7 @@
     const invitations = {
       submitRequest: (email) => post("/auth/registration-requests", { email }),
       listRequests: () => get("/auth/registration-requests"),
+      listInvitations: () => get("/auth/invitations"),
       review: (requestId, decision) =>
         post(`/auth/registration-requests/${requestId}/review`, { decision }),
       reissue: (requestId, { idempotencyKey, reason } = {}) =>

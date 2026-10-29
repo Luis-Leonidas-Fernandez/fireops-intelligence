@@ -17,11 +17,125 @@ function startServer() {
     '.svg': 'image/svg+xml',
   };
 
+  let mockFailReview = false;
+  let mockPendingRequests = [
+    {
+      id: 501,
+      email: 'solicitante.real@bomberos.gob.ar',
+      source: 'google',
+      requested_at: '2026-10-28T14:30:00Z',
+      status: 'pending',
+    },
+  ];
+  let mockInvitations = [
+    {
+      id: 901,
+      email: 'vigente.real@bomberos.gob.ar',
+      role: 'SUPERVISOR',
+      created_at: '2026-10-28T12:00:00Z',
+      expires_at: '2026-10-30T12:00:00Z',
+      used_at: null,
+      status: 'active',
+      registration_request_id: 400,
+      reissue_count: 0,
+      can_reissue: false,
+    },
+    {
+      id: 902,
+      email: 'vencida.real@bomberos.gob.ar',
+      role: 'SUPERVISOR',
+      created_at: '2026-10-20T12:00:00Z',
+      expires_at: '2026-10-22T12:00:00Z',
+      used_at: null,
+      status: 'expired',
+      registration_request_id: 401,
+      reissue_count: 1,
+      can_reissue: true,
+    },
+  ];
+
   const server = http.createServer((req, res) => {
     const parsedUrl = new URL(req.url, 'http://127.0.0.1');
+
+    if (parsedUrl.pathname === '/auth/me') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          id: 1,
+          email: 'admin@bomberos.gob.ar',
+          display_name: 'Admin Cuartel',
+          role: 'ADMINISTRADOR',
+        })
+      );
+      return;
+    }
+    if (parsedUrl.pathname === '/health') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ status: 'ok' }));
+      return;
+    }
+    if (
+      parsedUrl.pathname === '/inventory/categories' ||
+      parsedUrl.pathname === '/inventory/assets/' ||
+      parsedUrl.pathname === '/inventory/locations' ||
+      parsedUrl.pathname === '/inventory/movements'
+    ) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify([]));
+      return;
+    }
+    if (parsedUrl.pathname === '/auth/registration-requests' && req.method === 'GET') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(mockPendingRequests));
+      return;
+    }
+    if (parsedUrl.pathname === '/auth/invitations' && req.method === 'GET') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(mockInvitations));
+      return;
+    }
+    if (parsedUrl.pathname === '/auth/registration-requests/501/review' && req.method === 'POST') {
+      if (mockFailReview) {
+        res.writeHead(503, { 'Content-Type': 'application/json' });
+        res.end(
+          JSON.stringify({
+            error: {
+              code: 'DELIVERY_FAILED',
+              message: 'No se pudo enviar el correo de invitación.',
+            },
+          })
+        );
+        return;
+      }
+      mockPendingRequests = [];
+      mockInvitations.unshift({
+        id: 903,
+        email: 'solicitante.real@bomberos.gob.ar',
+        role: 'SUPERVISOR',
+        created_at: '2026-10-28T15:00:00Z',
+        expires_at: '2026-10-30T15:00:00Z',
+        used_at: null,
+        status: 'active',
+        registration_request_id: 501,
+        reissue_count: 0,
+        can_reissue: false,
+      });
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ message: 'Solicitud revisada.' }));
+      return;
+    }
+
+    if (parsedUrl.pathname === '/solicitudes') {
+      res.writeHead(303, { Location: '/?view=Invitaciones&tab=requests' });
+      res.end();
+      return;
+    }
+
     let filePath = path.join(FRONTEND_DIR, parsedUrl.pathname);
 
-    if (parsedUrl.pathname === '/registro') {
+    if (parsedUrl.pathname === '/') {
+      filePath = path.join(FRONTEND_DIR, 'index.html');
+    } else if (parsedUrl.pathname === '/registro') {
       filePath = path.join(FRONTEND_DIR, 'pages/registro/index.html');
     } else if (parsedUrl.pathname === '/iniciar-sesion') {
       filePath = path.join(FRONTEND_DIR, 'pages/iniciar-sesion/index.html');
@@ -44,7 +158,13 @@ function startServer() {
 
   return new Promise((resolve) => {
     server.listen(0, '127.0.0.1', () => {
-      resolve({ server, port: server.address().port });
+      resolve({
+        server,
+        port: server.address().port,
+        setMockFailReview: (val) => {
+          mockFailReview = Boolean(val);
+        },
+      });
     });
   });
 }
@@ -87,7 +207,7 @@ test('Real Browser (Google Chrome 154 Headless): verifies computed styles and mu
     return;
   }
 
-  const { server, port } = await startServer();
+  const { server, port, setMockFailReview } = await startServer();
   const cdpPort = port + 1000 + Math.floor(Math.random() * 500);
 
   // Launch real headless Chrome with CDP enabled
@@ -298,6 +418,139 @@ test('Real Browser (Google Chrome 154 Headless): verifies computed styles and mu
     assert.equal(termsRes.hasNoPlaceholders, true, 'Must NOT contain [Completar]');
     assert.equal(termsRes.hasNoINRI, true, 'Must NOT mention INRI Servicios Digitales');
     assert.equal(termsRes.hasOverflow, false, `Mobile view must not overflow horizontally (${termsRes.scrollWidth} > ${termsRes.innerWidth})`);
+
+    // 7. Navigate to Dashboard (/) and verify Gestión de accesos (#view-invitaciones)
+    await cdp.send('Emulation.setDeviceMetricsOverride', {
+      width: 1280,
+      height: 800,
+      deviceScaleFactor: 1,
+      mobile: false,
+    });
+    await cdp.send('Page.navigate', { url: `http://127.0.0.1:${port}/` });
+    await new Promise((r) => setTimeout(r, 350));
+
+    // Activate Gestión de accesos view
+    await cdp.send('Runtime.evaluate', {
+      expression: `document.querySelector('aside .primary-nav button[data-view="Invitaciones"]').click()`,
+    });
+    await new Promise((r) => setTimeout(r, 250));
+
+    const accessViewCheck = await cdp.send('Runtime.evaluate', {
+      expression: `(() => {
+        const view = document.querySelector('#view-invitaciones');
+        const reqRows = Array.from(document.querySelectorAll('#access-requests-tbody tr'));
+        const invRows = Array.from(document.querySelectorAll('#access-invitations-tbody tr'));
+        const reissueButtons = Array.from(document.querySelectorAll('#access-invitations-tbody button[data-action="reissue-invitation"]'));
+        return {
+          viewHidden: view.hidden,
+          pageTitle: document.querySelector('#page-title').textContent.trim(),
+          reqCountBadge: document.querySelector('#access-requests-count').textContent.trim(),
+          invCountBadge: document.querySelector('#access-invitations-count').textContent.trim(),
+          reqRowTexts: reqRows.map((r) => r.innerText),
+          invRowCount: invRows.length,
+          reissueBtnCount: reissueButtons.length,
+          reissueTargetReqId: reissueButtons[0] ? reissueButtons[0].dataset.requestId : null,
+          hasFictitiousEmails: view.innerHTML.includes('j.martinez@bomberos.gob.ar') || view.innerHTML.includes('r.sosa@bomberos.gob.ar'),
+        };
+      })()`,
+      returnByValue: true,
+    });
+
+    const acc = accessViewCheck.result.value;
+    assert.equal(acc.viewHidden, false, 'Gestión de accesos view must be visible');
+    assert.equal(acc.pageTitle, 'Gestión de accesos');
+    assert.equal(acc.reqCountBadge, '1');
+    assert.equal(acc.invCountBadge, '2');
+    assert.equal(acc.hasFictitiousEmails, false, 'Zero fictitious emails allowed');
+    assert.ok(acc.reqRowTexts[0].includes('solicitante.real@bomberos.gob.ar'));
+    assert.equal(acc.reissueBtnCount, 1, 'Only the invitation with can_reissue === true must render Reemitir button');
+    assert.equal(acc.reissueTargetReqId, '401');
+
+    // Test failure handling: when review fails (503), no success message is shown and error state is displayed
+    setMockFailReview(true);
+    await cdp.send('Runtime.evaluate', {
+      expression: `document.querySelector('#access-requests-tbody button[data-action="approve-request"]').click()`,
+    });
+    await new Promise((r) => setTimeout(r, 200));
+
+    const failureCheck = await cdp.send('Runtime.evaluate', {
+      expression: `(() => {
+        const banner = document.querySelector('#access-feedback-banner');
+        const toast = document.querySelector('#toast');
+        return {
+          bannerHidden: banner.hidden,
+          bannerState: banner.dataset.state,
+          bannerText: banner.textContent,
+          toastText: toast.textContent,
+        };
+      })()`,
+      returnByValue: true,
+    });
+
+    assert.equal(failureCheck.result.value.bannerHidden, false);
+    assert.equal(failureCheck.result.value.bannerState, 'error');
+    assert.ok(failureCheck.result.value.bannerText.includes('No se pudo enviar el correo'));
+    assert.ok(!failureCheck.result.value.toastText.includes('Solicitud aprobada'));
+
+    // Test success handling: when review succeeds (200), request disappears from pending and appears in invitations
+    setMockFailReview(false);
+    await cdp.send('Runtime.evaluate', {
+      expression: `document.querySelector('#access-requests-tbody button[data-action="approve-request"]').click()`,
+    });
+    await new Promise((r) => setTimeout(r, 250));
+
+    const successCheck = await cdp.send('Runtime.evaluate', {
+      expression: `(() => {
+        const banner = document.querySelector('#access-feedback-banner');
+        return {
+          bannerState: banner.dataset.state,
+          reqCountBadge: document.querySelector('#access-requests-count').textContent.trim(),
+          invCountBadge: document.querySelector('#access-invitations-count').textContent.trim(),
+          reqBodyText: document.querySelector('#access-requests-tbody').innerText,
+        };
+      })()`,
+      returnByValue: true,
+    });
+
+    assert.equal(successCheck.result.value.bannerState, 'success');
+    assert.equal(successCheck.result.value.reqCountBadge, '0');
+    assert.equal(successCheck.result.value.invCountBadge, '3');
+    assert.ok(successCheck.result.value.reqBodyText.includes('No hay solicitudes pendientes'));
+
+    // 8. Navigate to /solicitudes and verify redirect opens Dashboard -> Gestión de accesos -> Solicitudes pendientes
+    await cdp.send('Page.navigate', { url: `http://127.0.0.1:${port}/solicitudes` });
+    await new Promise((r) => setTimeout(r, 350));
+
+    const solicitudesRedirectCheck = await cdp.send('Runtime.evaluate', {
+      expression: `(() => {
+        const invView = document.querySelector('#view-invitaciones');
+        const dashView = document.querySelector('#view-inventario-general');
+        const tabReq = document.querySelector('#tab-access-requests');
+        const panelReq = document.querySelector('#panel-access-requests');
+        const panelInv = document.querySelector('#panel-access-invitations');
+        return {
+          pathname: window.location.pathname,
+          search: window.location.search,
+          pageTitle: document.querySelector('#page-title').textContent.trim(),
+          invViewHidden: invView.hidden,
+          dashViewHidden: dashView.hidden,
+          tabReqSelected: tabReq.getAttribute('aria-selected'),
+          panelReqHidden: panelReq.hidden,
+          panelInvHidden: panelInv.hidden,
+        };
+      })()`,
+      returnByValue: true,
+    });
+
+    const solRes = solicitudesRedirectCheck.result.value;
+    assert.equal(solRes.pathname, '/');
+    assert.equal(solRes.search, '?view=Invitaciones&tab=requests');
+    assert.equal(solRes.pageTitle, 'Gestión de accesos');
+    assert.equal(solRes.invViewHidden, false, '/solicitudes redirect must open #view-invitaciones');
+    assert.equal(solRes.dashViewHidden, true, 'Dashboard overview must be hidden when opening Gestión de accesos');
+    assert.equal(solRes.tabReqSelected, 'true', 'Solicitudes pendientes tab must be automatically selected');
+    assert.equal(solRes.panelReqHidden, false, 'Solicitudes pendientes panel must be visible');
+    assert.equal(solRes.panelInvHidden, true, 'Invitaciones emitidas panel must be hidden');
 
     cdp.ws.close();
   } finally {

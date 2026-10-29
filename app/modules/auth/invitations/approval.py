@@ -30,7 +30,14 @@ async def review_request(
         raise unavailable_request()
     token = None
     if decision == "approved":
-        _, token = await create_invitation(session, item.email, "SUPERVISOR", actor_id)
+        invitation, token = await create_invitation(
+            session, item.email, "SUPERVISOR", actor_id
+        )
+        item.current_invitation_id = invitation.id
+        item.reissue_count = 0
+        item.last_reissue_idempotency_key = None
+    else:
+        item.current_invitation_id = None
     item.status = decision
     item.reviewed_at = datetime.now(UTC)
     item.reviewed_by_id = actor_id

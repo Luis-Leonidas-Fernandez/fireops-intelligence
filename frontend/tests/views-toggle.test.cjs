@@ -42,7 +42,21 @@ test("HTML Structure: contains all required views and navigation items", () => {
   assert.match(html, /Parque de Bienes y Materiales/);
   assert.match(html, /Categorías de Inventario/);
   assert.match(html, /Ubicaciones y Destinos/);
-  assert.match(html, /Invitaciones y Altas de Personal/);
+  assert.match(html, /Gestión de accesos/);
+
+  // Verify Unified Access Management tabs & panels exist and zero fictitious rows/buttons remain
+  assert.match(html, /id="tab-access-requests"/);
+  assert.match(html, /id="tab-access-invitations"/);
+  assert.match(html, /id="panel-access-requests"/);
+  assert.match(html, /id="panel-access-invitations"/);
+  assert.match(html, /id="access-requests-tbody"/);
+  assert.match(html, /id="access-invitations-tbody"/);
+  assert.doesNotMatch(html, /j\.martinez@bomberos\.gob\.ar/);
+  assert.doesNotMatch(html, /r\.sosa@bomberos\.gob\.ar/);
+  assert.doesNotMatch(html, /m\.alvarez@bomberos\.gob\.ar/);
+  assert.doesNotMatch(html, /d\.fernandez@bomberos\.gob\.ar/);
+  assert.doesNotMatch(html, /Nueva invitación/);
+  assert.doesNotMatch(html, />Revocar</);
 });
 
 test("View Switching Simulation: toggling views hides dashboard cards and displays only target view", () => {

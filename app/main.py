@@ -132,13 +132,13 @@ async def registration_page() -> FileResponse:
 async def review_page(
     request: Request,
     session: Annotated[AsyncSession, Depends(get_database_session)],
-) -> FileResponse | RedirectResponse:
+) -> RedirectResponse:
     user_id = current_user_id(request)
     actor = await session.get(User, user_id) if user_id is not None else None
     if actor is None:
         return RedirectResponse("/iniciar-sesion?next=%2Fsolicitudes", status_code=303)
     await require_admin(session, actor)
-    return FileResponse(frontend_dir / "pages" / "solicitudes" / "index.html")
+    return RedirectResponse("/?view=Invitaciones&tab=requests", status_code=303)
 
 
 @app.get("/iniciar-sesion", include_in_schema=False)

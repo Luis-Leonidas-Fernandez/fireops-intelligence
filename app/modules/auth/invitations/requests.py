@@ -42,6 +42,9 @@ async def create_registration_request(
         existing.requested_at = now
         existing.reviewed_at = None
         existing.reviewed_by_id = None
+        existing.current_invitation_id = None
+        existing.reissue_count = 0
+        existing.last_reissue_idempotency_key = None
         return existing
     item = RegistrationRequest(
         email=email, source=source, requested_at=now, status="pending"

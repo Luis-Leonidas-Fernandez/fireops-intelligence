@@ -15,6 +15,10 @@ from app.modules.auth.invitations.mail import delivery_error
 from app.modules.auth.invitations.policy import require_admin, require_reissue_admin
 from app.modules.auth.invitations.reissue import reissue_registration_invitation
 from app.modules.auth.invitations.requests import list_pending_requests
+from app.modules.auth.invitations.service import (
+    InvitationStatus,
+    list_issued_invitations,
+)
 from app.modules.auth.invitations.workflows import (
     review_registration_request,
     submit_request,
@@ -64,6 +68,20 @@ class PendingRequestResponse(BaseModel):
     email: str
     source: str
     requested_at: str
+    status: Literal["pending"] = "pending"
+
+
+class IssuedInvitationResponse(BaseModel):
+    id: int
+    email: str
+    role: str
+    created_at: str
+    expires_at: str
+    used_at: str | None = None
+    status: InvitationStatus
+    registration_request_id: int | None = None
+    reissue_count: int = 0
+    can_reissue: bool = False
 
 
 @router.post(
@@ -105,6 +123,37 @@ async def list_requests(
             email=item.email,
             source=item.source,
             requested_at=item.requested_at.isoformat(),
+        )
+        for item in items
+    ]
+
+
+@router.get("/invitations", response_model=list[IssuedInvitationResponse])
+async def list_invitations(
+    request: Request, session: DatabaseSession, actor: CurrentUser
+) -> list[IssuedInvitationResponse]:
+    await require_admin(session, actor)
+    settings = get_settings()
+    await get_rate_limiter().check_admin_action_limit(
+        request,
+        admin_id=actor.id,
+        action="list_invitations",
+        max_requests=settings.admin_rate_limit_list_requests,
+        window_seconds=60,
+    )
+    items = await list_issued_invitations(session)
+    return [
+        IssuedInvitationResponse(
+            id=item.id,
+            email=item.email,
+            role=item.role,
+            created_at=item.created_at.isoformat(),
+            expires_at=item.expires_at.isoformat(),
+            used_at=item.used_at.isoformat() if item.used_at else None,
+            status=item.status,
+            registration_request_id=item.registration_request_id,
+            reissue_count=item.reissue_count,
+            can_reissue=item.can_reissue,
         )
         for item in items
     ]

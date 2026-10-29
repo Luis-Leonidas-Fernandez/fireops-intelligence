@@ -56,7 +56,7 @@
           <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h15"/><path d="m15 3 4 4-4 4"/><path d="M20 17H5"/><path d="m9 13-4 4 4 4"/></svg></span><span>Movimientos</span>
         </button>
         <button class="nav-item" type="button" data-view="Invitaciones">
-          <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><polyline points="3,7 12,13 21,7"/></svg></span><span>Invitaciones</span>
+          <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><polyline points="3,7 12,13 21,7"/></svg></span><span>Gestión de accesos</span>
         </button>
         <button class="nav-item" type="button" data-view="Auditoría">
           <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5h6"/><path d="M9 3h6v4H9z"/><path d="M7 5H5v16h14V5h-2"/><path d="m8 14 2.5 2.5L16 11"/></svg></span><span>Auditoría</span>
@@ -110,7 +110,7 @@
         <button type="button" data-view="Bienes">Bienes</button>
         <button type="button" data-view="Categorías">Categorías</button>
         <button type="button" data-view="Ubicaciones">Ubicaciones</button>
-        <button type="button" data-view="Invitaciones">Invitaciones</button>
+        <button type="button" data-view="Invitaciones">Gestión de accesos</button>
         <button type="button" data-view="Movimientos">Movimientos</button>
         <button type="button" data-view="Alertas">Alertas</button>
       </nav>
@@ -520,92 +520,78 @@
           </article>
         </section>
 
-        <!-- VISTA: INVITACIONES -->
-        <section id="view-invitaciones" class="view-content" data-view="Invitaciones" hidden aria-label="Gestión de invitaciones">
+        <!-- VISTA: GESTIÓN DE ACCESOS (SOLICITUDES E INVITACIONES REALES) -->
+        <section id="view-invitaciones" class="view-content" data-view="Invitaciones" hidden aria-label="Gestión de accesos">
           <article class="panel">
             <header class="panel-header">
               <div>
                 <p class="panel-kicker">Acceso y Seguridad</p>
-                <h2>Invitaciones y Altas de Personal</h2>
+                <h2>Gestión de accesos</h2>
               </div>
               <div class="panel-toolbar">
                 <label class="table-search view-search">
                   <span aria-hidden="true">⌕</span>
-                  <span class="sr-only">Buscar invitaciones</span>
-                  <input type="search" placeholder="Buscar por correo o rol…" aria-label="Buscar invitaciones">
+                  <span class="sr-only">Buscar en gestión de accesos</span>
+                  <input type="search" id="access-search-input" placeholder="Buscar por correo, origen o estado…" aria-label="Buscar en gestión de accesos">
                 </label>
-                <button type="button" class="action-button primary"><span aria-hidden="true">+</span> Nueva invitación</button>
+                <button type="button" class="action-button" id="btn-refresh-access">
+                  <span aria-hidden="true">↻</span> Actualizar
+                </button>
               </div>
             </header>
-            <div class="table-tabs" role="tablist" aria-label="Filtrar por estado de la invitación">
-              <button class="is-active" type="button" role="tab" aria-selected="true" data-filter="all">Todas <span class="count-badge">4</span></button>
-              <button type="button" role="tab" aria-selected="false" data-filter="pending">Pendientes <span class="count-badge">2</span></button>
-              <button type="button" role="tab" aria-selected="false" data-filter="accepted">Aceptadas <span class="count-badge">1</span></button>
-              <button type="button" role="tab" aria-selected="false" data-filter="expired">Expiradas <span class="count-badge">1</span></button>
+
+            <div class="table-tabs" id="access-management-tabs" role="tablist" aria-label="Secciones de gestión de accesos">
+              <button class="is-active" type="button" role="tab" id="tab-access-requests" aria-selected="true" aria-controls="panel-access-requests" data-access-tab="requests">
+                Solicitudes pendientes <span class="count-badge" id="access-requests-count">0</span>
+              </button>
+              <button type="button" role="tab" id="tab-access-invitations" aria-selected="false" aria-controls="panel-access-invitations" data-access-tab="invitations">
+                Invitaciones emitidas <span class="count-badge" id="access-invitations-count">0</span>
+              </button>
             </div>
-            <div class="table-scroll">
-              <table>
-                <thead>
-                  <tr>
-                    <th scope="col">Destinatario</th>
-                    <th scope="col">Rol Asignado</th>
-                    <th scope="col">Fecha de Envío</th>
-                    <th scope="col">Vencimiento</th>
-                    <th scope="col">Estado</th>
-                    <th scope="col"><span class="sr-only">Acciones</span></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr data-status="pending">
-                    <td><strong>j.martinez@bomberos.gob.ar</strong></td>
-                    <td><span class="badge-role">BOMBERO</span></td>
-                    <td class="table-muted">26/10/2026 10:15</td>
-                    <td class="table-muted">28/10/2026 (en 42h)</td>
-                    <td><span class="status-pill warning">Pendiente</span></td>
-                    <td>
-                      <div class="table-actions">
-                        <button class="action-button-sm" type="button">Reemitir</button>
-                        <button class="action-button-sm danger" type="button">Revocar</button>
-                      </div>
-                    </td>
-                  </tr>
-                  <tr data-status="pending">
-                    <td><strong>r.sosa@bomberos.gob.ar</strong></td>
-                    <td><span class="badge-role">SUPERVISOR</span></td>
-                    <td class="table-muted">26/10/2026 09:30</td>
-                    <td class="table-muted">28/10/2026 (en 41h)</td>
-                    <td><span class="status-pill warning">Pendiente</span></td>
-                    <td>
-                      <div class="table-actions">
-                        <button class="action-button-sm" type="button">Reemitir</button>
-                        <button class="action-button-sm danger" type="button">Revocar</button>
-                      </div>
-                    </td>
-                  </tr>
-                  <tr data-status="accepted">
-                    <td><strong>m.alvarez@bomberos.gob.ar</strong></td>
-                    <td><span class="badge-role">BOMBERO</span></td>
-                    <td class="table-muted">25/10/2026 14:00</td>
-                    <td class="table-muted">27/10/2026</td>
-                    <td><span class="status-pill success">Aceptada</span></td>
-                    <td>
-                      <small class="table-muted">Registrado</small>
-                    </td>
-                  </tr>
-                  <tr data-status="expired">
-                    <td><strong>d.fernandez@bomberos.gob.ar</strong></td>
-                    <td><span class="badge-role">BOMBERO</span></td>
-                    <td class="table-muted">20/10/2026 08:00</td>
-                    <td class="table-muted">22/10/2026</td>
-                    <td><span class="status-pill danger">Expirada</span></td>
-                    <td>
-                      <div class="table-actions">
-                        <button class="action-button-sm" type="button">Reemitir</button>
-                      </div>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+
+            <div id="access-feedback-banner" class="access-feedback-banner" role="status" aria-live="polite" hidden style="margin: 12px 0; padding: 10px 14px; border-radius: 6px; font-size: 0.78rem; border: 1px solid var(--border);"></div>
+
+            <div id="panel-access-requests" role="tabpanel" aria-labelledby="tab-access-requests">
+              <div class="table-scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      <th scope="col">Solicitante</th>
+                      <th scope="col">Método de solicitud</th>
+                      <th scope="col">Fecha de solicitud</th>
+                      <th scope="col">Estado</th>
+                      <th scope="col"><span class="sr-only">Acciones</span></th>
+                    </tr>
+                  </thead>
+                  <tbody id="access-requests-tbody">
+                    <tr>
+                      <td colspan="5" style="text-align:center; padding: 24px; color: var(--text-soft);">Cargando solicitudes pendientes…</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div id="panel-access-invitations" role="tabpanel" aria-labelledby="tab-access-invitations" hidden>
+              <div class="table-scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      <th scope="col">Destinatario</th>
+                      <th scope="col">Rol asignado</th>
+                      <th scope="col">Fecha de emisión</th>
+                      <th scope="col">Vencimiento</th>
+                      <th scope="col">Estado</th>
+                      <th scope="col"><span class="sr-only">Acciones</span></th>
+                    </tr>
+                  </thead>
+                  <tbody id="access-invitations-tbody">
+                    <tr>
+                      <td colspan="6" style="text-align:center; padding: 24px; color: var(--text-soft);">Cargando invitaciones emitidas…</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
           </article>
         </section>

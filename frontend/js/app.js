@@ -155,7 +155,7 @@
     "Categorías": "Clasificación y catálogo de bienes del cuerpo de bomberos.",
     "Nueva categoría": "Alta y registro de nueva categoría en el catálogo operativo.",
     "Ubicaciones": "Destinos operativos, cuarteles, depósitos y móviles asignados.",
-    "Invitaciones": "Control y emisión de invitaciones de acceso para personal autorizado.",
+    "Invitaciones": "Revisión de solicitudes de registro e invitaciones emitidas con autorización administrativa.",
     "Vehículos": "Parque automotor, autobombas, cisternas y unidades de apoyo.",
     "Responsables": "Asignación de personal a cargo de activos y equipamiento.",
     "Movimientos": "Historial de ingresos, egresos, traslados y bajas.",
@@ -183,7 +183,7 @@
 
     const titleEl = document.querySelector("#page-title");
     const subtitleEl = document.querySelector("#page-subtitle");
-    if (titleEl) titleEl.textContent = view;
+    if (titleEl) titleEl.textContent = view === "Invitaciones" ? "Gestión de accesos" : view;
     if (subtitleEl) subtitleEl.textContent = VIEW_SUBTITLES[view] || `${view}: vista ilustrativa con datos de demostración.`;
 
     const headingActions = document.querySelector("#dashboard-heading-actions");
@@ -216,7 +216,11 @@
       }
     }
 
-    showToast(`${view} seleccionado`);
+    if (view === "Invitaciones") {
+      loadAccessManagementData();
+    }
+
+    showToast(`${view === "Invitaciones" ? "Gestión de accesos" : view} seleccionado`);
   }
 
   function csvCell(value) { return `"${String(value).replaceAll('"', '""')}"`; }
@@ -260,7 +264,7 @@
   }
 
   renderer.render(dateRange.value);
-  window.DashboardProfile.mount();
+  const profileMountPromise = window.DashboardProfile.mount();
   checkApiConnection();
   document.querySelector(".global-search").addEventListener("submit", event => event.preventDefault());
   document.querySelectorAll("[data-view]").forEach(button => button.addEventListener("click", () => setActiveView(button.dataset.view)));
@@ -297,6 +301,7 @@
   });
   mobileMenu.addEventListener("click", () => { const expanded = mobileMenu.getAttribute("aria-expanded") === "true"; mobileMenu.setAttribute("aria-expanded", String(!expanded)); mobileNav.hidden = expanded; });
   document.querySelectorAll(".table-tabs button").forEach(button => {
+    if (button.closest("#view-invitaciones, #view-bienes, #view-movimientos")) return;
     button.addEventListener("click", () => {
       const tabContainer = button.closest(".table-tabs");
       if (tabContainer) {
@@ -345,6 +350,7 @@
   }
 
   document.querySelectorAll(".view-search input").forEach(input => {
+    if (input.closest("#view-invitaciones, #view-bienes, #view-categorias, #view-movimientos")) return;
     input.addEventListener("input", () => {
       const query = input.value.trim().toLowerCase();
       const panel = input.closest(".panel");
@@ -1029,6 +1035,493 @@
       }
     });
   });
+
+  // --- GESTIÓN DE ACCESOS (SOLICITUDES PENDIENTES E INVITACIONES EMITIDAS) ---
+  const accessApiClient =
+    window.FireApiClient && typeof window.FireApiClient.createApiClient === "function"
+      ? window.FireApiClient.createApiClient()
+      : null;
+
+  const accessTabRequests = document.querySelector("#tab-access-requests");
+  const accessTabInvitations = document.querySelector("#tab-access-invitations");
+  const accessPanelRequests = document.querySelector("#panel-access-requests");
+  const accessPanelInvitations = document.querySelector("#panel-access-invitations");
+  const accessRequestsCountEl = document.querySelector("#access-requests-count");
+  const accessInvitationsCountEl = document.querySelector("#access-invitations-count");
+  const accessRequestsTbody = document.querySelector("#access-requests-tbody");
+  const accessInvitationsTbody = document.querySelector("#access-invitations-tbody");
+  const accessFeedbackBanner = document.querySelector("#access-feedback-banner");
+  const accessSearchInput = document.querySelector("#access-search-input");
+  const btnRefreshAccess = document.querySelector("#btn-refresh-access");
+
+  const accessState = {
+    activeTab: "requests",
+    requests: [],
+    invitations: [],
+    loading: false,
+    query: "",
+  };
+
+  function setAccessFeedback(message, type = "info") {
+    if (!accessFeedbackBanner) return;
+    if (!message) {
+      accessFeedbackBanner.hidden = true;
+      accessFeedbackBanner.textContent = "";
+      delete accessFeedbackBanner.dataset.state;
+      return;
+    }
+    accessFeedbackBanner.hidden = false;
+    accessFeedbackBanner.textContent = message;
+    accessFeedbackBanner.dataset.state = type;
+    if (type === "error") {
+      accessFeedbackBanner.style.borderColor = "rgba(229, 57, 53, 0.45)";
+      accessFeedbackBanner.style.background = "rgba(229, 57, 53, 0.12)";
+      accessFeedbackBanner.style.color = "var(--primary-hover)";
+    } else if (type === "success") {
+      accessFeedbackBanner.style.borderColor = "rgba(129, 199, 132, 0.35)";
+      accessFeedbackBanner.style.background = "rgba(46, 125, 50, 0.14)";
+      accessFeedbackBanner.style.color = "#81c784";
+    } else {
+      accessFeedbackBanner.style.borderColor = "var(--border)";
+      accessFeedbackBanner.style.background = "var(--surface)";
+      accessFeedbackBanner.style.color = "var(--text-soft)";
+    }
+  }
+
+  function formatAccessDate(value) {
+    if (!value) return "—";
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return String(value);
+    return parsed.toLocaleString("es-AR", {
+      dateStyle: "short",
+      timeStyle: "short",
+    });
+  }
+
+  function formatSourceLabel(source) {
+    return source === "google" ? "Google OAuth" : "Correo y contraseña";
+  }
+
+  function formatInvitationStatusMeta(status) {
+    switch (status) {
+      case "active":
+        return { label: "Activa (pendiente de uso)", pillClass: "status-pill warning" };
+      case "consumed":
+        return { label: "Utilizada", pillClass: "status-pill success" };
+      case "expired":
+        return { label: "Vencida", pillClass: "status-pill danger" };
+      case "revoked":
+        return { label: "Revocada / reemplazada", pillClass: "status-pill neutral" };
+      default:
+        return { label: String(status || "Desconocido"), pillClass: "status-pill neutral" };
+    }
+  }
+
+  function renderSingleMessageRow(tbody, colSpan, message) {
+    if (!tbody) return;
+    tbody.replaceChildren();
+    const tr = document.createElement("tr");
+    const td = document.createElement("td");
+    td.colSpan = colSpan;
+    td.style.textAlign = "center";
+    td.style.padding = "24px";
+    td.style.color = "var(--text-soft)";
+    td.textContent = message;
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+  }
+
+  function renderAccessRequests() {
+    if (!accessRequestsTbody) return;
+    if (accessRequestsCountEl) {
+      accessRequestsCountEl.textContent = String(accessState.requests.length);
+    }
+
+    const q = accessState.query.trim().toLowerCase();
+    const filtered = accessState.requests.filter((item) => {
+      if (!q) return true;
+      const sourceLabel = formatSourceLabel(item.source).toLowerCase();
+      return (
+        String(item.email || "").toLowerCase().includes(q) ||
+        sourceLabel.includes(q) ||
+        "pendiente".includes(q)
+      );
+    });
+
+    if (!filtered.length) {
+      renderSingleMessageRow(
+        accessRequestsTbody,
+        5,
+        accessState.requests.length === 0
+          ? "No hay solicitudes pendientes de revisión."
+          : "Ninguna solicitud pendiente coincide con la búsqueda."
+      );
+      return;
+    }
+
+    accessRequestsTbody.replaceChildren();
+    filtered.forEach((item) => {
+      const tr = document.createElement("tr");
+      tr.dataset.requestId = String(item.id);
+
+      const emailTd = document.createElement("td");
+      const emailStrong = document.createElement("strong");
+      emailStrong.textContent = item.email;
+      emailTd.appendChild(emailStrong);
+
+      const sourceTd = document.createElement("td");
+      const sourceBadge = document.createElement("span");
+      sourceBadge.className = "status-pill neutral";
+      sourceBadge.textContent = formatSourceLabel(item.source);
+      sourceTd.appendChild(sourceBadge);
+
+      const dateTd = document.createElement("td");
+      dateTd.className = "table-muted";
+      dateTd.textContent = formatAccessDate(item.requested_at);
+
+      const statusTd = document.createElement("td");
+      const statusBadge = document.createElement("span");
+      statusBadge.className = "status-pill warning";
+      statusBadge.textContent = "Pendiente de revisión";
+      statusTd.appendChild(statusBadge);
+
+      const actionsTd = document.createElement("td");
+      const actionsWrap = document.createElement("div");
+      actionsWrap.className = "table-actions";
+
+      const approveBtn = document.createElement("button");
+      approveBtn.type = "button";
+      approveBtn.className = "action-button-sm";
+      approveBtn.dataset.action = "approve-request";
+      approveBtn.dataset.requestId = String(item.id);
+      approveBtn.textContent = "Aprobar";
+
+      const rejectBtn = document.createElement("button");
+      rejectBtn.type = "button";
+      rejectBtn.className = "action-button-sm danger";
+      rejectBtn.dataset.action = "reject-request";
+      rejectBtn.dataset.requestId = String(item.id);
+      rejectBtn.textContent = "Rechazar";
+
+      approveBtn.addEventListener("click", () =>
+        handleReviewRequest(item.id, "approved", [approveBtn, rejectBtn])
+      );
+      rejectBtn.addEventListener("click", () =>
+        handleReviewRequest(item.id, "rejected", [approveBtn, rejectBtn])
+      );
+
+      actionsWrap.append(approveBtn, rejectBtn);
+      actionsTd.appendChild(actionsWrap);
+
+      tr.append(emailTd, sourceTd, dateTd, statusTd, actionsTd);
+      accessRequestsTbody.appendChild(tr);
+    });
+  }
+
+  function renderAccessInvitations() {
+    if (!accessInvitationsTbody) return;
+    if (accessInvitationsCountEl) {
+      accessInvitationsCountEl.textContent = String(accessState.invitations.length);
+    }
+
+    const q = accessState.query.trim().toLowerCase();
+    const filtered = accessState.invitations.filter((item) => {
+      if (!q) return true;
+      const meta = formatInvitationStatusMeta(item.status);
+      return (
+        String(item.email || "").toLowerCase().includes(q) ||
+        String(item.role || "").toLowerCase().includes(q) ||
+        meta.label.toLowerCase().includes(q) ||
+        String(item.status || "").toLowerCase().includes(q)
+      );
+    });
+
+    if (!filtered.length) {
+      renderSingleMessageRow(
+        accessInvitationsTbody,
+        6,
+        accessState.invitations.length === 0
+          ? "No hay invitaciones emitidas registradas."
+          : "Ninguna invitación emitida coincide con la búsqueda."
+      );
+      return;
+    }
+
+    accessInvitationsTbody.replaceChildren();
+    filtered.forEach((item) => {
+      const tr = document.createElement("tr");
+      tr.dataset.invitationId = String(item.id);
+      tr.dataset.status = String(item.status || "");
+
+      const emailTd = document.createElement("td");
+      const emailStrong = document.createElement("strong");
+      emailStrong.textContent = item.email;
+      emailTd.appendChild(emailStrong);
+
+      const roleTd = document.createElement("td");
+      const roleBadge = document.createElement("span");
+      roleBadge.className = "badge-role";
+      roleBadge.textContent = item.role || "SUPERVISOR";
+      roleTd.appendChild(roleBadge);
+
+      const createdTd = document.createElement("td");
+      createdTd.className = "table-muted";
+      createdTd.textContent = formatAccessDate(item.created_at);
+
+      const expiresTd = document.createElement("td");
+      expiresTd.className = "table-muted";
+      expiresTd.textContent = formatAccessDate(item.expires_at);
+
+      const statusTd = document.createElement("td");
+      const meta = formatInvitationStatusMeta(item.status);
+      const statusBadge = document.createElement("span");
+      statusBadge.className = meta.pillClass;
+      statusBadge.textContent = meta.label;
+      statusTd.appendChild(statusBadge);
+      if (Number(item.reissue_count) > 0) {
+        const sub = document.createElement("small");
+        sub.className = "table-muted";
+        sub.style.display = "block";
+        sub.style.marginTop = "3px";
+        sub.textContent = `Reemisiones: ${item.reissue_count}/3`;
+        statusTd.appendChild(sub);
+      }
+
+      const actionsTd = document.createElement("td");
+      if (item.can_reissue === true && item.registration_request_id != null) {
+        const actionsWrap = document.createElement("div");
+        actionsWrap.className = "table-actions";
+        const reissueBtn = document.createElement("button");
+        reissueBtn.type = "button";
+        reissueBtn.className = "action-button-sm";
+        reissueBtn.dataset.action = "reissue-invitation";
+        reissueBtn.dataset.requestId = String(item.registration_request_id);
+        reissueBtn.textContent = "Reemitir";
+        reissueBtn.addEventListener("click", () =>
+          handleReissueInvitation(item.registration_request_id, reissueBtn)
+        );
+        actionsWrap.appendChild(reissueBtn);
+        actionsTd.appendChild(actionsWrap);
+      } else {
+        const info = document.createElement("small");
+        info.className = "table-muted";
+        if (item.status === "consumed") {
+          info.textContent = "Registrado";
+        } else if (item.status === "active") {
+          info.textContent = "Vigente";
+        } else if (Number(item.reissue_count) >= 3) {
+          info.textContent = "Límite alcanzado";
+        } else {
+          info.textContent = "Sin acciones";
+        }
+        actionsTd.appendChild(info);
+      }
+
+      tr.append(emailTd, roleTd, createdTd, expiresTd, statusTd, actionsTd);
+      accessInvitationsTbody.appendChild(tr);
+    });
+  }
+
+  function switchAccessTab(tabName) {
+    const isRequests = tabName !== "invitations";
+    accessState.activeTab = isRequests ? "requests" : "invitations";
+
+    if (accessTabRequests) {
+      accessTabRequests.classList.toggle("is-active", isRequests);
+      accessTabRequests.setAttribute("aria-selected", String(isRequests));
+    }
+    if (accessTabInvitations) {
+      accessTabInvitations.classList.toggle("is-active", !isRequests);
+      accessTabInvitations.setAttribute("aria-selected", String(!isRequests));
+    }
+    if (accessPanelRequests) {
+      accessPanelRequests.hidden = !isRequests;
+    }
+    if (accessPanelInvitations) {
+      accessPanelInvitations.hidden = isRequests;
+    }
+  }
+
+  async function loadAccessManagementData(options = {}) {
+    if (!accessRequestsTbody || !accessInvitationsTbody) return;
+    accessState.loading = true;
+    if (!options.preserveFeedback) {
+      setAccessFeedback("", "info");
+    }
+    renderSingleMessageRow(accessRequestsTbody, 5, "Cargando solicitudes pendientes…");
+    renderSingleMessageRow(accessInvitationsTbody, 6, "Cargando invitaciones emitidas…");
+
+    try {
+      let requestsData;
+      let invitationsData;
+
+      if (accessApiClient) {
+        const [reqRes, invRes] = await Promise.all([
+          accessApiClient.invitations.listRequests(),
+          accessApiClient.invitations.listInvitations(),
+        ]);
+        requestsData = reqRes.data;
+        invitationsData = invRes.data;
+      } else {
+        const [reqResp, invResp] = await Promise.all([
+          fetch("/auth/registration-requests", { credentials: "same-origin" }),
+          fetch("/auth/invitations", { credentials: "same-origin" }),
+        ]);
+        if (!reqResp.ok) {
+          const errJson = await reqResp.json().catch(() => ({}));
+          throw new Error(extractApiErrorMessage(errJson, "No se pudieron consultar las solicitudes."));
+        }
+        if (!invResp.ok) {
+          const errJson = await invResp.json().catch(() => ({}));
+          throw new Error(extractApiErrorMessage(errJson, "No se pudieron consultar las invitaciones."));
+        }
+        requestsData = await reqResp.json();
+        invitationsData = await invResp.json();
+      }
+
+      accessState.requests = Array.isArray(requestsData) ? requestsData : [];
+      accessState.invitations = Array.isArray(invitationsData) ? invitationsData : [];
+      renderAccessRequests();
+      renderAccessInvitations();
+    } catch (error) {
+      const msg = error?.message || "No se pudo cargar la información de Gestión de accesos.";
+      setAccessFeedback(msg, "error");
+      renderSingleMessageRow(accessRequestsTbody, 5, msg);
+      renderSingleMessageRow(accessInvitationsTbody, 6, msg);
+    } finally {
+      accessState.loading = false;
+    }
+  }
+
+  async function handleReviewRequest(requestId, decision, buttons = []) {
+    buttons.forEach((btn) => {
+      if (btn) btn.disabled = true;
+    });
+    setAccessFeedback("Procesando decisión administrativa…", "info");
+
+    try {
+      if (accessApiClient) {
+        await accessApiClient.invitations.review(requestId, decision);
+      } else {
+        const resp = await fetch(`/auth/registration-requests/${requestId}/review`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Accept": "application/json" },
+          body: JSON.stringify({ decision }),
+          credentials: "same-origin",
+        });
+        if (!resp.ok) {
+          const errJson = await resp.json().catch(() => ({}));
+          throw new Error(extractApiErrorMessage(errJson, "No se pudo procesar la solicitud."));
+        }
+      }
+
+      const successText =
+        decision === "approved"
+          ? "Solicitud aprobada e invitación enviada."
+          : "Solicitud rechazada.";
+      setAccessFeedback(successText, "success");
+      showToast(successText);
+      await loadAccessManagementData({ preserveFeedback: true });
+    } catch (error) {
+      const errMsg = error?.message || "No se pudo procesar la solicitud.";
+      setAccessFeedback(errMsg, "error");
+      showToast(`Error: ${errMsg}`);
+      buttons.forEach((btn) => {
+        if (btn) btn.disabled = false;
+      });
+    }
+  }
+
+  async function handleReissueInvitation(requestId, button) {
+    if (button) button.disabled = true;
+    setAccessFeedback("Reemitiendo invitación…", "info");
+
+    try {
+      let respMessage = "Invitación reemitida exitosamente.";
+      if (accessApiClient) {
+        const res = await accessApiClient.invitations.reissue(requestId, {
+          reason: "Reemisión administrativa desde Gestión de accesos",
+        });
+        if (res?.data?.message) {
+          respMessage = res.data.message;
+        }
+      } else {
+        const resp = await fetch(`/auth/registration-requests/${requestId}/reissue`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Idempotency-Key": `reissue-${requestId}-${Date.now()}`,
+          },
+          body: JSON.stringify({
+            reason: "Reemisión administrativa desde Gestión de accesos",
+          }),
+          credentials: "same-origin",
+        });
+        if (!resp.ok) {
+          const errJson = await resp.json().catch(() => ({}));
+          throw new Error(extractApiErrorMessage(errJson, "No se pudo reemitir la invitación."));
+        }
+        const dataJson = await resp.json().catch(() => ({}));
+        if (dataJson?.message) respMessage = dataJson.message;
+      }
+
+      setAccessFeedback(respMessage, "success");
+      showToast(respMessage);
+      await loadAccessManagementData({ preserveFeedback: true });
+    } catch (error) {
+      const errMsg = error?.message || "No se pudo reemitir la invitación.";
+      setAccessFeedback(errMsg, "error");
+      showToast(`Error: ${errMsg}`);
+      if (button) button.disabled = false;
+    }
+  }
+
+  if (accessTabRequests) {
+    accessTabRequests.addEventListener("click", () => switchAccessTab("requests"));
+  }
+  if (accessTabInvitations) {
+    accessTabInvitations.addEventListener("click", () => switchAccessTab("invitations"));
+  }
+  if (btnRefreshAccess) {
+    btnRefreshAccess.addEventListener("click", () => loadAccessManagementData());
+  }
+  if (accessSearchInput) {
+    accessSearchInput.addEventListener("input", (event) => {
+      accessState.query = event.target.value || "";
+      renderAccessRequests();
+      renderAccessInvitations();
+    });
+  }
+
+  window.AccessManagementController = Object.freeze({
+    loadAccessManagementData,
+    switchAccessTab,
+    handleReviewRequest,
+    handleReissueInvitation,
+    getState: () => ({
+      activeTab: accessState.activeTab,
+      requests: [...accessState.requests],
+      invitations: [...accessState.invitations],
+      loading: accessState.loading,
+      query: accessState.query,
+    }),
+  });
+
+  const requestedView = authParams.get("view");
+  const requestedTab = authParams.get("tab");
+  if (requestedView === "Invitaciones" || requestedView === "Gestión de accesos") {
+    switchAccessTab(requestedTab === "invitations" ? "invitations" : "requests");
+    setActiveView("Invitaciones");
+  }
+  if (profileMountPromise && typeof profileMountPromise.then === "function") {
+    profileMountPromise.then((user) => {
+      const invView = document.querySelector("#view-invitaciones");
+      if (user && user.role !== "ADMINISTRADOR" && invView && !invView.hidden) {
+        setActiveView("Inventario general");
+      }
+    });
+  }
 
   document.addEventListener("keydown", event => { if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") { event.preventDefault(); globalSearch.focus(); } });
 })();

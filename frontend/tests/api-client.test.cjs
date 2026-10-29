@@ -345,3 +345,42 @@ test("generateUuidV4 returns valid RFC4122 v4 UUID format", () => {
     /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
   );
 });
+
+test("API Client: invitations.listInvitations sends GET /auth/invitations", async () => {
+  let capturedUrl = null;
+  let capturedOptions = null;
+
+  globalThis.fetch = async (url, options) => {
+    capturedUrl = url;
+    capturedOptions = options;
+    return createMockResponse({
+      status: 200,
+      headers: { "content-type": "application/json" },
+      json: async () => [
+        {
+          id: 7,
+          email: "bombero@cuartel.gob.ar",
+          role: "SUPERVISOR",
+          created_at: "2026-10-28T10:00:00Z",
+          expires_at: "2026-10-30T10:00:00Z",
+          used_at: null,
+          status: "active",
+          registration_request_id: 3,
+          reissue_count: 0,
+          can_reissue: false,
+        },
+      ],
+    });
+  };
+
+  const client = createApiClient({ baseUrl: "http://localhost:8000" });
+  const res = await client.invitations.listInvitations();
+
+  assert.equal(res.ok, true);
+  assert.equal(capturedUrl, "http://localhost:8000/auth/invitations");
+  assert.equal(capturedOptions.method, "GET");
+  assert.equal(capturedOptions.credentials, "same-origin");
+  assert.equal(res.data.length, 1);
+  assert.equal(res.data[0].email, "bombero@cuartel.gob.ar");
+  assert.equal(res.data[0].can_reissue, false);
+});

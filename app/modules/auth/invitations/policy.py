@@ -16,7 +16,7 @@ async def require_admin(session: AsyncSession, actor: User) -> None:
         or actor.google_sub != settings.registration_reviewer_google_sub
         or role is None
         or not role.activo
-        or role.nombre not in {"ADMINISTRADOR", "SUPERVISOR"}
+        or role.nombre != "ADMINISTRADOR"
     ):
         raise AuthorizationError(
             code="REGISTRATION_REVIEW_DENIED",

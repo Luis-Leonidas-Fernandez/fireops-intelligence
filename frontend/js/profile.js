@@ -52,6 +52,13 @@
         window.FireNavigationController = window.FireNavigation.createNavigationController({ initialRole: user.role || null });
       }
 
+      if (typeof document.querySelectorAll === "function") {
+        const isAdmin = user.role === "ADMINISTRADOR";
+        document.querySelectorAll('[data-view="Invitaciones"]').forEach((btn) => {
+          btn.hidden = !isAdmin;
+        });
+      }
+
       return user;
     } catch (_error) {
       nameNode.textContent = "Cuenta";
