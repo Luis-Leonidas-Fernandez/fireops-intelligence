@@ -4,6 +4,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.auth.models import User
 from app.modules.inventory.shared.models import Asset, Location, Movement
+from app.modules.inventory.shared.vehicle_container import (
+    IneligibleVehicleAssetError,
+    VehicleAssetNotFoundError,
+    VehicleLocationInactiveError,
+    resolve_or_create_vehicle_location,
+)
 from app.modules.inventory.transfer_asset.schemas import (
     MovementItemResponse,
     TransferAssetRequest,
@@ -43,30 +49,42 @@ async def transfer_asset(
     - Updates asset.ubicacion_id to the destination location.
     - Commits the transaction, or rolls back completely on any constraint violation.
     """
-    asset = await session.scalar(
-        select(Asset).where(Asset.id == asset_id).with_for_update()
-    )
-    if asset is None:
-        raise AssetNotFoundError
-
-    destination = await session.get(Location, payload.destination_location_id)
-    if destination is None or not destination.activa:
-        raise DestinationUnavailableError
-    if asset.ubicacion_id == destination.id:
-        raise SameLocationError
-
-    movement = Movement(
-        bien_id=asset.id,
-        usuario_id=actor_id,
-        tipo_movimiento="TRASLADO",
-        ubicacion_origen_id=asset.ubicacion_id,
-        ubicacion_destino_id=destination.id,
-        motivo=payload.reason,
-        observaciones=payload.observations,
-    )
-    asset.ubicacion_id = destination.id
-    session.add(movement)
     try:
+        asset = await session.scalar(
+            select(Asset).where(Asset.id == asset_id).with_for_update()
+        )
+        if asset is None:
+            raise AssetNotFoundError
+
+        if payload.destination_vehicle_asset_id is not None:
+            if payload.destination_vehicle_asset_id == asset.id:
+                raise TransferConstraintViolationError
+            try:
+                destination = await resolve_or_create_vehicle_location(
+                    session, payload.destination_vehicle_asset_id
+                )
+            except (VehicleAssetNotFoundError, VehicleLocationInactiveError) as error:
+                raise DestinationUnavailableError from error
+        else:
+            assert payload.destination_location_id is not None
+            destination = await session.get(Location, payload.destination_location_id)
+            if destination is None or not destination.activa:
+                raise DestinationUnavailableError
+
+        if asset.ubicacion_id == destination.id:
+            raise SameLocationError
+
+        movement = Movement(
+            bien_id=asset.id,
+            usuario_id=actor_id,
+            tipo_movimiento="TRASLADO",
+            ubicacion_origen_id=asset.ubicacion_id,
+            ubicacion_destino_id=destination.id,
+            motivo=payload.reason,
+            observaciones=payload.observations,
+        )
+        asset.ubicacion_id = destination.id
+        session.add(movement)
         await session.commit()
         await session.refresh(movement)
         return movement

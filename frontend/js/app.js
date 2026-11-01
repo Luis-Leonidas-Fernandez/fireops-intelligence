@@ -48,18 +48,212 @@
     return fallbackMsg;
   }
 
-  function populateLocationOptions(locations) {
+  function isExactVehicleCategoryName(name) {
+    const normalized = String(name || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim()
+      .toLowerCase();
+    return normalized === "vehiculo" || normalized === "vehiculos";
+  }
+
+  function escapeOptionHtml(value) {
+    return String(value ?? "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;");
+  }
+
+  function buildDestinationOptionItems({
+    locations = [],
+    assets = [],
+    categories = [],
+    excludeLocationId = null,
+    excludeAssetId = null,
+  }) {
+    const locList = Array.isArray(locations) ? locations : [];
+    const assetList = Array.isArray(assets) ? assets : [];
+    const catList = Array.isArray(categories) ? categories : [];
+
+    const vehicleCategoryIds = new Set();
+    catList.forEach(c => {
+      if (isExactVehicleCategoryName(c.name)) {
+        vehicleCategoryIds.add(Number(c.id));
+      }
+    });
+
+    const assetByIdMap = new Map(assetList.map(a => [Number(a.id), a]));
+    const vehicleLocationByAssetId = new Map();
+    const standaloneVehicleLocations = [];
+
+    locList.forEach(loc => {
+      const isVeh = String(loc?.location_type || loc?.type || "FISICA").toUpperCase() === "VEHICULO";
+      if (isVeh && loc.container_asset_id !== null && loc.container_asset_id !== undefined) {
+        const cid = Number(loc.container_asset_id);
+        vehicleLocationByAssetId.set(cid, loc);
+        if (!assetByIdMap.has(cid)) {
+          standaloneVehicleLocations.push(loc);
+        }
+      } else if (isVeh) {
+        standaloneVehicleLocations.push(loc);
+      }
+    });
+
+    const physicalLocations = locList.filter(
+      loc => String(loc?.location_type || loc?.type || "FISICA").toUpperCase() !== "VEHICULO"
+    );
+    const physicalLocMap = new Map(physicalLocations.map(l => [Number(l.id), l]));
+
+    const vehicleTargets = [];
+    const seenAssetIds = new Set();
+
+    assetList.forEach(asset => {
+      const aid = Number(asset.id);
+      if (seenAssetIds.has(aid)) return;
+      if (excludeAssetId !== null && aid === Number(excludeAssetId)) return;
+
+      const mobileLoc = vehicleLocationByAssetId.get(aid) || null;
+      const inVehCat =
+        asset.category_id !== null &&
+        asset.category_id !== undefined &&
+        vehicleCategoryIds.has(Number(asset.category_id));
+
+      if (!mobileLoc && !inVehCat) return;
+      seenAssetIds.add(aid);
+
+      if (mobileLoc && excludeLocationId !== null && Number(mobileLoc.id) === Number(excludeLocationId)) {
+        return;
+      }
+
+      const parkingLocId =
+        asset.location_id !== null &&
+        asset.location_id !== undefined &&
+        physicalLocMap.has(Number(asset.location_id))
+          ? Number(asset.location_id)
+          : null;
+      const parkingLocName = parkingLocId !== null ? physicalLocMap.get(parkingLocId).name : null;
+
+      if (mobileLoc) {
+        const baseLabel =
+          mobileLoc.name && mobileLoc.name !== asset.name
+            ? `${mobileLoc.name} (${asset.internal_code})`
+            : `${asset.name} (${asset.internal_code})`;
+        vehicleTargets.push({
+          value: String(mobileLoc.id),
+          label: baseLabel,
+          parkingLocId,
+          parkingLocName,
+          unconfigured: false,
+        });
+      } else {
+        vehicleTargets.push({
+          value: `veh:${aid}`,
+          label: `${asset.name} (${asset.internal_code})`,
+          parkingLocId,
+          parkingLocName,
+          unconfigured: true,
+        });
+      }
+    });
+
+    standaloneVehicleLocations.forEach(loc => {
+      if (excludeLocationId !== null && Number(loc.id) === Number(excludeLocationId)) return;
+      vehicleTargets.push({
+        value: String(loc.id),
+        label: loc.name,
+        parkingLocId: null,
+        parkingLocName: null,
+        unconfigured: false,
+      });
+    });
+
+    const items = [];
+    const vehiclesByParkingLoc = new Map();
+    const unparkedVehicles = [];
+
+    vehicleTargets.forEach(v => {
+      if (v.parkingLocId !== null) {
+        if (!vehiclesByParkingLoc.has(v.parkingLocId)) {
+          vehiclesByParkingLoc.set(v.parkingLocId, []);
+        }
+        vehiclesByParkingLoc.get(v.parkingLocId).push(v);
+      } else {
+        unparkedVehicles.push(v);
+      }
+    });
+
+    physicalLocations.forEach(physLoc => {
+      const pid = Number(physLoc.id);
+      if (excludeLocationId === null || pid !== Number(excludeLocationId)) {
+        items.push({
+          value: String(physLoc.id),
+          text: physLoc.name,
+        });
+      }
+      const parkedHere = vehiclesByParkingLoc.get(pid) || [];
+      parkedHere.forEach(v => {
+        items.push({
+          value: v.value,
+          text: `  - ${v.label} — ${physLoc.name}`,
+        });
+      });
+    });
+
+    unparkedVehicles.forEach(v => {
+      items.push({
+        value: v.value,
+        text: `  - ${v.label}`,
+      });
+    });
+
+    return items;
+  }
+
+  function populateLocationOptions(locations, selectedId = null, assets = null, categories = null) {
     const locSelect = document.querySelector("#asset-location");
     if (!locSelect) return;
-    const currentVal = locSelect.value;
-    const hasLocations = Array.isArray(locations) && locations.length > 0;
+    const currentVal = selectedId !== null && selectedId !== undefined ? String(selectedId) : locSelect.value;
+    const isNew = currentVal === "__NEW__";
+    const realData = window.DashboardRenderer?.getRealData?.() || {};
+    const resolvedAssets = Array.isArray(assets) ? assets : (realData.assets || []);
+    const resolvedCategories = Array.isArray(categories) ? categories : (realData.categories || []);
+
+    const destItems = buildDestinationOptionItems({
+      locations: Array.isArray(locations) ? locations : [],
+      assets: resolvedAssets,
+      categories: resolvedCategories,
+    });
+
     const options = [
       `<option value="" ${!currentVal ? "selected" : ""}>Sin asignación fija (Depósito)</option>`,
-      ...(hasLocations ? locations.map(l => `<option value="${l.id}">${l.name}</option>`) : [])
+      ...destItems.map(
+        item =>
+          `<option value="${escapeOptionHtml(item.value)}" ${item.value === currentVal ? "selected" : ""}>${escapeOptionHtml(item.text)}</option>`
+      ),
+      `<option value="__NEW__" class="opt-new-category" ${isNew ? "selected" : ""}>+ Nueva ubicación…</option>`,
     ];
     locSelect.innerHTML = options.join("");
-    if (currentVal && hasLocations && locations.some(l => String(l.id) === currentVal)) {
+    if (isNew) {
+      locSelect.value = "__NEW__";
+    } else if (currentVal && destItems.some(item => item.value === currentVal)) {
       locSelect.value = currentVal;
+    } else {
+      locSelect.value = "";
+    }
+  }
+
+  function populateContainerAssetOptions(assets) {
+    const containerSelect = document.querySelector("#location-container-asset");
+    if (!containerSelect || !Array.isArray(assets)) return;
+    const currentVal = containerSelect.value;
+    const options = [
+      `<option value="" disabled ${!currentVal ? "selected" : ""}>Seleccione el bien contenedor…</option>`,
+      ...assets.map(a => `<option value="${a.id}">${a.name} (${a.internal_code})</option>`)
+    ];
+    containerSelect.innerHTML = options.join("");
+    if (currentVal && assets.some(a => String(a.id) === currentVal)) {
+      containerSelect.value = currentVal;
     }
   }
 
@@ -102,7 +296,8 @@
       }
 
       populateCategoryOptions(categories);
-      populateLocationOptions(locations);
+      populateLocationOptions(locations, null, assets, categories);
+      populateContainerAssetOptions(assets);
 
       const realData = { assets, categories, locations, movements };
       if (window.DashboardRenderer && typeof window.DashboardRenderer.setRealData === "function") {
@@ -152,9 +347,13 @@
     "Inventario general": "Vista operativa de bienes, estados y movimientos del inventario.",
     "Bienes": "Gestión integral de equipamiento, herramientas y materiales operativos.",
     "Nuevo bien": "Alta de equipamiento, herramientas y materiales operativos.",
+    "Detalle de bien": "Ficha técnica, ubicación actual y trazabilidad de movimientos del bien.",
     "Categorías": "Clasificación y catálogo de bienes del cuerpo de bomberos.",
     "Nueva categoría": "Alta y registro de nueva categoría en el catálogo operativo.",
+    "Detalle de categoría": "Listado de bienes asociados a la categoría seleccionada.",
     "Ubicaciones": "Destinos operativos, cuarteles, depósitos y móviles asignados.",
+    "Nueva ubicación": "Alta y registro de nueva ubicación física o vehicular en el inventario.",
+    "Detalle de ubicación": "Listado de bienes asignados actualmente a la ubicación seleccionada.",
     "Invitaciones": "Revisión de solicitudes de registro e invitaciones emitidas con autorización administrativa.",
     "Vehículos": "Parque automotor, autobombas, cisternas y unidades de apoyo.",
     "Responsables": "Asignación de personal a cargo de activos y equipamiento.",
@@ -163,6 +362,9 @@
     "Reportes": "Informes consolidados y estadísticas de inventario.",
     "Alertas": "Monitoreo preventivo y avisos de mantenimiento técnico.",
   };
+
+  let detalleBienReturnView = "Bienes";
+  let ubicacionDetalleReturnView = "Ubicaciones";
 
   function setActiveView(view) {
     if (window.FireNavigationController && typeof window.FireNavigationController.selectView === "function") {
@@ -176,7 +378,15 @@
       const isNav = Boolean(button.closest("nav"));
       const active = (button.dataset.view === view) ||
         (isNav && view === "Nuevo bien" && button.dataset.view === "Bienes") ||
-        (isNav && view === "Nueva categoría" && button.dataset.view === "Categorías");
+        (isNav && view === "Detalle de bien" && (
+          (detalleBienReturnView === "Detalle de ubicación" && button.dataset.view === (ubicacionDetalleReturnView === "Vehículos" ? "Vehículos" : "Ubicaciones")) ||
+          (detalleBienReturnView === "Detalle de categoría" && button.dataset.view === "Categorías") ||
+          (detalleBienReturnView === "Vehículos" && button.dataset.view === "Vehículos") ||
+          (detalleBienReturnView !== "Detalle de ubicación" && detalleBienReturnView !== "Detalle de categoría" && detalleBienReturnView !== "Vehículos" && button.dataset.view === "Bienes")
+        )) ||
+        (isNav && (view === "Nueva categoría" || view === "Detalle de categoría") && button.dataset.view === "Categorías") ||
+        (isNav && view === "Nueva ubicación" && button.dataset.view === "Ubicaciones") ||
+        (isNav && view === "Detalle de ubicación" && button.dataset.view === (ubicacionDetalleReturnView === "Vehículos" ? "Vehículos" : "Ubicaciones"));
       button.classList.toggle("is-active", active);
       if (isNav) active ? button.setAttribute("aria-current", "page") : button.removeAttribute("aria-current");
     });
@@ -218,6 +428,8 @@
 
     if (view === "Invitaciones") {
       loadAccessManagementData();
+    } else if (view === "Vehículos") {
+      loadVehiculosViewData();
     }
 
     showToast(`${view === "Invitaciones" ? "Gestión de accesos" : view} seleccionado`);
@@ -301,7 +513,7 @@
   });
   mobileMenu.addEventListener("click", () => { const expanded = mobileMenu.getAttribute("aria-expanded") === "true"; mobileMenu.setAttribute("aria-expanded", String(!expanded)); mobileNav.hidden = expanded; });
   document.querySelectorAll(".table-tabs button").forEach(button => {
-    if (button.closest("#view-invitaciones, #view-bienes, #view-movimientos")) return;
+    if (button.closest("#view-invitaciones, #view-bienes, #view-ubicaciones, #view-movimientos")) return;
     button.addEventListener("click", () => {
       const tabContainer = button.closest(".table-tabs");
       if (tabContainer) {
@@ -350,7 +562,7 @@
   }
 
   document.querySelectorAll(".view-search input").forEach(input => {
-    if (input.closest("#view-invitaciones, #view-bienes, #view-categorias, #view-movimientos")) return;
+    if (input.closest("#view-invitaciones, #view-bienes, #view-categorias, #view-categoria-bienes, #view-ubicaciones, #view-ubicacion-bienes, #view-vehiculos, #view-movimientos")) return;
     input.addEventListener("input", () => {
       const query = input.value.trim().toLowerCase();
       const panel = input.closest(".panel");
@@ -366,10 +578,523 @@
     });
   });
 
+  let ubicacionReturnView = "Ubicaciones";
+  let lastValidAssetLocationValue = "";
+
+  function configureNuevaUbicacionReturnTarget(originView = "Ubicaciones") {
+    ubicacionReturnView = originView;
+    const backBtn = document.querySelector("#btn-cancelar-crear-ubicacion");
+    const footerCancelBtn = document.querySelector("#btn-cancelar-ubicacion-footer");
+    if (backBtn) {
+      backBtn.dataset.viewTarget = originView;
+      backBtn.innerHTML = `<span aria-hidden="true">←</span> Volver a ${originView}`;
+    }
+    if (footerCancelBtn) {
+      footerCancelBtn.dataset.viewTarget = originView;
+    }
+  }
+
+  function setScopedBienesFeedback(selector, message, isError = true) {
+    const banner = document.querySelector(selector);
+    if (!banner) return;
+    if (!message) {
+      banner.hidden = true;
+      banner.textContent = "";
+      delete banner.dataset.state;
+      return;
+    }
+    banner.hidden = false;
+    banner.textContent = message;
+    banner.dataset.state = isError ? "error" : "info";
+    if (isError) {
+      banner.style.borderColor = "rgba(229, 57, 53, 0.45)";
+      banner.style.background = "rgba(229, 57, 53, 0.12)";
+      banner.style.color = "var(--primary-hover)";
+    } else {
+      banner.style.borderColor = "var(--border)";
+      banner.style.background = "var(--surface)";
+      banner.style.color = "var(--text-soft)";
+    }
+  }
+
+  function setUbicacionBienesFeedback(message, isError = true) {
+    setScopedBienesFeedback("#ubicacion-bienes-feedback", message, isError);
+  }
+
+  function setCategoriaBienesFeedback(message, isError = true) {
+    setScopedBienesFeedback("#categoria-bienes-feedback", message, isError);
+  }
+
+  function setVehiculosFeedback(message, isError = true) {
+    setScopedBienesFeedback("#vehiculos-feedback", message, isError);
+  }
+
+  async function loadVehiculosViewData() {
+    setVehiculosFeedback("", false);
+    const tableBody = document.querySelector("#vehiculos-table-body");
+    const searchInput = document.querySelector("#vehiculos-search-input");
+    const existingData = window.DashboardRenderer?.getRealData?.();
+    if (existingData && typeof window.DashboardRenderer?.renderVehiculosView === "function") {
+      window.DashboardRenderer.renderVehiculosView(existingData, searchInput?.value || "");
+    } else if (tableBody) {
+      tableBody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding: 24px; color: var(--text-soft);">Cargando parque automotor…</td></tr>`;
+    }
+
+    try {
+      const [locsResp, assetsResp, catsResp] = await Promise.all([
+        fetch("/inventory/locations", { credentials: "same-origin" }),
+        fetch("/inventory/assets/", { credentials: "same-origin" }),
+        fetch("/inventory/categories", { credentials: "same-origin" }),
+      ]);
+
+      if (locsResp.status === 401 || assetsResp.status === 401 || catsResp.status === 401) {
+        const msg = "Sesión expirada o no autenticada. Iniciá sesión para consultar los vehículos.";
+        setVehiculosFeedback(msg, true);
+        if (tableBody) {
+          tableBody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding: 24px; color: var(--text-soft);">${msg}</td></tr>`;
+        }
+        showToast(`Error: ${msg}`);
+        return;
+      }
+
+      if (locsResp.status === 403 || assetsResp.status === 403 || catsResp.status === 403) {
+        const msg = "No tenés permisos para consultar el parque automotor.";
+        setVehiculosFeedback(msg, true);
+        if (tableBody) {
+          tableBody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding: 24px; color: var(--text-soft);">${msg}</td></tr>`;
+        }
+        showToast(`Error: ${msg}`);
+        return;
+      }
+
+      if (!locsResp.ok || !assetsResp.ok || !catsResp.ok) {
+        let errDetail = "No se pudo obtener la información de vehículos.";
+        try {
+          const failedResp = !locsResp.ok ? locsResp : (!assetsResp.ok ? assetsResp : catsResp);
+          const errJson = await failedResp.json();
+          errDetail = extractApiErrorMessage(errJson, errDetail);
+        } catch (_) {}
+        setVehiculosFeedback(errDetail, true);
+        if (tableBody) {
+          tableBody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding: 24px; color: var(--text-soft);">${errDetail}</td></tr>`;
+        }
+        showToast(`Error: ${errDetail}`);
+        return;
+      }
+
+      const [locationsData, assetsData, categoriesData] = await Promise.all([
+        locsResp.json(),
+        assetsResp.json(),
+        catsResp.json(),
+      ]);
+
+      const currentReal = window.DashboardRenderer?.getRealData?.() || { movements: [] };
+      const updatedRealData = {
+        assets: Array.isArray(assetsData) ? assetsData : [],
+        categories: Array.isArray(categoriesData) ? categoriesData : [],
+        locations: Array.isArray(locationsData) ? locationsData : [],
+        movements: Array.isArray(currentReal.movements) ? currentReal.movements : [],
+      };
+
+      if (window.DashboardRenderer && typeof window.DashboardRenderer.setRealData === "function") {
+        window.DashboardRenderer.setRealData(updatedRealData);
+      }
+      if (window.DashboardRenderer && typeof window.DashboardRenderer.renderVehiculosView === "function") {
+        window.DashboardRenderer.renderVehiculosView(updatedRealData, searchInput?.value || "");
+      }
+    } catch (_error) {
+      const msg = "Error de conexión al consultar el parque automotor.";
+      setVehiculosFeedback(msg, true);
+      if (tableBody && !existingData) {
+        tableBody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding: 24px; color: var(--text-soft);">${msg}</td></tr>`;
+      }
+      showToast(msg);
+    }
+  }
+
+  async function openLocationAssetsView(locationId, originView = "Ubicaciones") {
+    const locIdNum = Number(locationId);
+    if (!Number.isFinite(locIdNum) || locIdNum <= 0) {
+      showToast("Error: Identificador de ubicación inválido.");
+      return;
+    }
+
+    if (window.FireNavigationController && typeof window.FireNavigationController.canAccessModule === "function") {
+      const role = window.FireNavigationController.getCurrentRole?.();
+      if (role && !window.FireNavigationController.canAccessModule("Detalle de ubicación", role)) {
+        showToast("Acceso denegado a Detalle de ubicación");
+        return;
+      }
+    }
+
+    ubicacionDetalleReturnView = originView || "Ubicaciones";
+    const backBtn = document.querySelector("#btn-volver-ubicaciones");
+    if (backBtn) {
+      backBtn.dataset.viewTarget = ubicacionDetalleReturnView;
+      backBtn.innerHTML = `<span aria-hidden="true">←</span> Volver a ${ubicacionDetalleReturnView}`;
+    }
+
+    const searchInput = document.querySelector("#ubicacion-bienes-search-input");
+    if (searchInput) searchInput.value = "";
+    setUbicacionBienesFeedback("", false);
+
+    setActiveView("Detalle de ubicación");
+
+    const tableBody = document.querySelector("#ubicacion-bienes-table-body");
+    const existingData = window.DashboardRenderer?.getRealData?.();
+    if (existingData && typeof window.DashboardRenderer?.renderUbicacionBienesView === "function") {
+      window.DashboardRenderer.renderUbicacionBienesView(existingData, locIdNum, "");
+    } else if (tableBody) {
+      tableBody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 24px; color: var(--text-soft);">Cargando bienes de la ubicación…</td></tr>`;
+    }
+
+    try {
+      const [locResp, assetsResp, catsResp] = await Promise.all([
+        fetch(`/inventory/locations/${encodeURIComponent(locIdNum)}`, { credentials: "same-origin" }),
+        fetch("/inventory/assets/", { credentials: "same-origin" }),
+        fetch("/inventory/categories", { credentials: "same-origin" }),
+      ]);
+
+      if (locResp.status === 401 || assetsResp.status === 401 || catsResp.status === 401) {
+        const msg = "Sesión expirada o no autenticada. Iniciá sesión para consultar los bienes.";
+        setUbicacionBienesFeedback(msg, true);
+        if (tableBody) {
+          tableBody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 24px; color: var(--text-soft);">${msg}</td></tr>`;
+        }
+        showToast(`Error: ${msg}`);
+        return;
+      }
+
+      if (locResp.status === 403 || assetsResp.status === 403 || catsResp.status === 403) {
+        const msg = "No tenés permisos para consultar los bienes de esta ubicación.";
+        setUbicacionBienesFeedback(msg, true);
+        if (tableBody) {
+          tableBody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 24px; color: var(--text-soft);">${msg}</td></tr>`;
+        }
+        showToast(`Error: ${msg}`);
+        return;
+      }
+
+      if (locResp.status === 404) {
+        const msg = "La ubicación seleccionada no existe o no fue encontrada.";
+        setUbicacionBienesFeedback(msg, true);
+        if (tableBody) {
+          tableBody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 24px; color: var(--text-soft);">${msg}</td></tr>`;
+        }
+        showToast(`Error: ${msg}`);
+        return;
+      }
+
+      if (!locResp.ok || !assetsResp.ok || !catsResp.ok) {
+        let errDetail = "No se pudieron obtener los bienes de la ubicación.";
+        try {
+          const failedResp = !locResp.ok ? locResp : (!assetsResp.ok ? assetsResp : catsResp);
+          const errJson = await failedResp.json();
+          errDetail = extractApiErrorMessage(errJson, errDetail);
+        } catch (_) {}
+        setUbicacionBienesFeedback(errDetail, true);
+        if (tableBody) {
+          tableBody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 24px; color: var(--text-soft);">${errDetail}</td></tr>`;
+        }
+        showToast(`Error: ${errDetail}`);
+        return;
+      }
+
+      const [locationObj, assetsData, categoriesData] = await Promise.all([
+        locResp.json(),
+        assetsResp.json(),
+        catsResp.json(),
+      ]);
+
+      const currentReal = window.DashboardRenderer?.getRealData?.() || { locations: [], movements: [] };
+      const existingLocations = Array.isArray(currentReal.locations) ? [...currentReal.locations] : [];
+      const locIdx = existingLocations.findIndex(l => Number(l.id) === Number(locationObj.id));
+      if (locIdx >= 0) {
+        existingLocations[locIdx] = locationObj;
+      } else {
+        existingLocations.push(locationObj);
+      }
+
+      const updatedRealData = {
+        assets: Array.isArray(assetsData) ? assetsData : [],
+        categories: Array.isArray(categoriesData) ? categoriesData : [],
+        locations: existingLocations,
+        movements: Array.isArray(currentReal.movements) ? currentReal.movements : [],
+      };
+
+      if (window.DashboardRenderer && typeof window.DashboardRenderer.setRealData === "function") {
+        window.DashboardRenderer.setRealData(updatedRealData);
+      }
+      if (window.DashboardRenderer && typeof window.DashboardRenderer.renderUbicacionBienesView === "function") {
+        window.DashboardRenderer.renderUbicacionBienesView(updatedRealData, locIdNum, searchInput?.value || "");
+      }
+    } catch (_error) {
+      const msg = "Error de conexión al consultar los bienes de la ubicación.";
+      setUbicacionBienesFeedback(msg, true);
+      if (tableBody && !existingData) {
+        tableBody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 24px; color: var(--text-soft);">${msg}</td></tr>`;
+      }
+      showToast(msg);
+    }
+  }
+
+  async function openCategoryAssetsView(categoryId) {
+    const catIdNum = Number(categoryId);
+    if (!Number.isFinite(catIdNum) || catIdNum <= 0) {
+      showToast("Error: Identificador de categoría inválido.");
+      return;
+    }
+
+    if (window.FireNavigationController && typeof window.FireNavigationController.canAccessModule === "function") {
+      const role = window.FireNavigationController.getCurrentRole?.();
+      if (role && !window.FireNavigationController.canAccessModule("Detalle de categoría", role)) {
+        showToast("Acceso denegado a Detalle de categoría");
+        return;
+      }
+    }
+
+    const searchInput = document.querySelector("#categoria-bienes-search-input");
+    if (searchInput) searchInput.value = "";
+    setCategoriaBienesFeedback("", false);
+
+    setActiveView("Detalle de categoría");
+
+    const tableBody = document.querySelector("#categoria-bienes-table-body");
+    const existingData = window.DashboardRenderer?.getRealData?.();
+    if (existingData && typeof window.DashboardRenderer?.renderCategoriaBienesView === "function") {
+      window.DashboardRenderer.renderCategoriaBienesView(existingData, catIdNum, "");
+    } else if (tableBody) {
+      tableBody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 24px; color: var(--text-soft);">Cargando bienes de la categoría…</td></tr>`;
+    }
+
+    try {
+      const [catsResp, assetsResp, locsResp] = await Promise.all([
+        fetch("/inventory/categories", { credentials: "same-origin" }),
+        fetch("/inventory/assets/", { credentials: "same-origin" }),
+        fetch("/inventory/locations", { credentials: "same-origin" }),
+      ]);
+
+      if (catsResp.status === 401 || assetsResp.status === 401 || locsResp.status === 401) {
+        const msg = "Sesión expirada o no autenticada. Iniciá sesión para consultar los bienes.";
+        setCategoriaBienesFeedback(msg, true);
+        if (tableBody) {
+          tableBody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 24px; color: var(--text-soft);">${msg}</td></tr>`;
+        }
+        showToast(`Error: ${msg}`);
+        return;
+      }
+
+      if (catsResp.status === 403 || assetsResp.status === 403 || locsResp.status === 403) {
+        const msg = "No tenés permisos para consultar los bienes de esta categoría.";
+        setCategoriaBienesFeedback(msg, true);
+        if (tableBody) {
+          tableBody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 24px; color: var(--text-soft);">${msg}</td></tr>`;
+        }
+        showToast(`Error: ${msg}`);
+        return;
+      }
+
+      if (catsResp.status === 404) {
+        const msg = "La categoría seleccionada no existe o no fue encontrada.";
+        setCategoriaBienesFeedback(msg, true);
+        if (tableBody) {
+          tableBody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 24px; color: var(--text-soft);">${msg}</td></tr>`;
+        }
+        showToast(`Error: ${msg}`);
+        return;
+      }
+
+      if (!catsResp.ok || !assetsResp.ok || !locsResp.ok) {
+        let errDetail = "No se pudieron obtener los bienes de la categoría.";
+        try {
+          const failedResp = !catsResp.ok ? catsResp : (!assetsResp.ok ? assetsResp : locsResp);
+          const errJson = await failedResp.json();
+          errDetail = extractApiErrorMessage(errJson, errDetail);
+        } catch (_) {}
+        setCategoriaBienesFeedback(errDetail, true);
+        if (tableBody) {
+          tableBody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 24px; color: var(--text-soft);">${errDetail}</td></tr>`;
+        }
+        showToast(`Error: ${errDetail}`);
+        return;
+      }
+
+      const [categoriesData, assetsData, locationsData] = await Promise.all([
+        catsResp.json(),
+        assetsResp.json(),
+        locsResp.json(),
+      ]);
+
+      const categoriesList = Array.isArray(categoriesData) ? categoriesData : [];
+      const categoryObj = categoriesList.find(c => Number(c.id) === catIdNum);
+      if (!categoryObj) {
+        const msg = "La categoría seleccionada no existe o no fue encontrada.";
+        setCategoriaBienesFeedback(msg, true);
+        if (tableBody) {
+          tableBody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 24px; color: var(--text-soft);">${msg}</td></tr>`;
+        }
+        showToast(`Error: ${msg}`);
+        return;
+      }
+
+      const currentReal = window.DashboardRenderer?.getRealData?.() || { movements: [] };
+      const updatedRealData = {
+        assets: Array.isArray(assetsData) ? assetsData : [],
+        categories: categoriesList,
+        locations: Array.isArray(locationsData) ? locationsData : [],
+        movements: Array.isArray(currentReal.movements) ? currentReal.movements : [],
+      };
+
+      if (window.DashboardRenderer && typeof window.DashboardRenderer.setRealData === "function") {
+        window.DashboardRenderer.setRealData(updatedRealData);
+      }
+      if (window.DashboardRenderer && typeof window.DashboardRenderer.renderCategoriaBienesView === "function") {
+        window.DashboardRenderer.renderCategoriaBienesView(updatedRealData, catIdNum, searchInput?.value || "");
+      }
+    } catch (_error) {
+      const msg = "Error de conexión al consultar los bienes de la categoría.";
+      setCategoriaBienesFeedback(msg, true);
+      if (tableBody && !existingData) {
+        tableBody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 24px; color: var(--text-soft);">${msg}</td></tr>`;
+      }
+      showToast(msg);
+    }
+  }
+
+  async function openAssetDetailView(assetId, originView = "Bienes") {
+    const assetIdNum = Number(assetId);
+    if (!Number.isFinite(assetIdNum) || assetIdNum <= 0) return;
+
+    detalleBienReturnView = originView || "Bienes";
+    const backBtn = document.querySelector("#btn-volver-detalle-bien");
+    if (backBtn) {
+      backBtn.dataset.viewTarget = detalleBienReturnView;
+      const returnLabel = detalleBienReturnView === "Detalle de ubicación"
+        ? "la ubicación"
+        : detalleBienReturnView === "Detalle de categoría"
+          ? "la categoría"
+          : detalleBienReturnView;
+      backBtn.innerHTML = `<span aria-hidden="true">←</span> Volver a ${returnLabel}`;
+    }
+
+    const feedbackEl = document.querySelector("#bien-detalle-feedback");
+    if (feedbackEl) {
+      feedbackEl.hidden = true;
+      feedbackEl.textContent = "";
+    }
+
+    setActiveView("Detalle de bien");
+
+    const currentReal = window.DashboardRenderer?.getRealData?.();
+    if (currentReal && typeof window.DashboardRenderer?.renderDetalleBienView === "function") {
+      window.DashboardRenderer.renderDetalleBienView(currentReal, assetIdNum);
+    }
+
+    try {
+      const [assetResp, transfersResp] = await Promise.all([
+        fetch(`/inventory/assets/${encodeURIComponent(assetIdNum)}`, { credentials: "same-origin" }),
+        fetch(`/inventory/assets/${encodeURIComponent(assetIdNum)}/transfers`, { credentials: "same-origin" }).catch(() => ({ ok: false })),
+      ]);
+
+      if (!assetResp.ok) {
+        const msg = assetResp.status === 403
+          ? "No tenés permisos para consultar el detalle de este bien."
+          : "No se pudo cargar el detalle actualizado del bien.";
+        if (feedbackEl) {
+          feedbackEl.hidden = false;
+          feedbackEl.textContent = msg;
+        }
+        return;
+      }
+
+      const assetObj = await assetResp.json();
+      let transfers = null;
+      if (transfersResp && transfersResp.ok && typeof transfersResp.json === "function") {
+        try {
+          const tData = await transfersResp.json();
+          if (Array.isArray(tData)) transfers = tData;
+        } catch (_) {}
+      }
+
+      const baseReal = window.DashboardRenderer?.getRealData?.() || { assets: [], categories: [], locations: [], movements: [] };
+      const assetsList = Array.isArray(baseReal.assets) ? [...baseReal.assets] : [];
+      const aIdx = assetsList.findIndex(a => Number(a.id) === Number(assetObj.id));
+      if (aIdx >= 0) assetsList[aIdx] = assetObj;
+      else assetsList.push(assetObj);
+
+      const mergedReal = { ...baseReal, assets: assetsList };
+      if (window.DashboardRenderer && typeof window.DashboardRenderer.renderDetalleBienView === "function") {
+        window.DashboardRenderer.renderDetalleBienView(mergedReal, assetIdNum, transfers);
+      }
+    } catch (_err) {
+      if (feedbackEl) {
+        feedbackEl.hidden = false;
+        feedbackEl.textContent = "Error de conexión al consultar el detalle del bien.";
+      }
+    }
+  }
+
   // Delegated handler ensures clicks on button, icon, or text reliably activate the target view
   document.addEventListener("click", (event) => {
+    const verDotacionVehBtn = event.target.closest(".btn-ver-dotacion-vehiculo");
+    if (verDotacionVehBtn && verDotacionVehBtn.dataset.locId) {
+      event.preventDefault();
+      openLocationAssetsView(Number(verDotacionVehBtn.dataset.locId), "Vehículos");
+      return;
+    }
+    const verFichaVehBtn = event.target.closest(".btn-ver-ficha-vehiculo");
+    if (verFichaVehBtn && verFichaVehBtn.dataset.assetId) {
+      event.preventDefault();
+      openAssetDetailView(Number(verFichaVehBtn.dataset.assetId), "Vehículos");
+      return;
+    }
+    const verBienesLocBtn = event.target.closest(".btn-ver-bienes-ubicacion, button[data-loc-id]");
+    if (verBienesLocBtn && verBienesLocBtn.dataset.locId) {
+      event.preventDefault();
+      const fromVehiculos = Boolean(verBienesLocBtn.closest?.("#view-vehiculos"));
+      openLocationAssetsView(Number(verBienesLocBtn.dataset.locId), fromVehiculos ? "Vehículos" : "Ubicaciones");
+      return;
+    }
+    const verBienesCatBtn = event.target.closest(".btn-ver-bienes-categoria, button[data-cat-id]");
+    if (verBienesCatBtn && verBienesCatBtn.dataset.catId) {
+      event.preventDefault();
+      openCategoryAssetsView(Number(verBienesCatBtn.dataset.catId));
+      return;
+    }
+    const verDetalleBienBtn = event.target.closest(".btn-ver-detalle-bien");
+    if (verDetalleBienBtn && verDetalleBienBtn.dataset.assetId) {
+      event.preventDefault();
+      let originView = "Bienes";
+      if (verDetalleBienBtn.closest?.("#view-ubicacion-bienes")) {
+        originView = "Detalle de ubicación";
+      } else if (verDetalleBienBtn.closest?.("#view-categoria-bienes")) {
+        originView = "Detalle de categoría";
+      } else if (verDetalleBienBtn.closest?.("#view-vehiculos")) {
+        originView = "Vehículos";
+      }
+      openAssetDetailView(Number(verDetalleBienBtn.dataset.assetId), originView);
+      return;
+    }
+    const volverDetalleBienBtn = event.target.closest("#btn-volver-detalle-bien");
+    if (volverDetalleBienBtn) {
+      event.preventDefault();
+      setActiveView(detalleBienReturnView || "Bienes");
+      return;
+    }
+    const volverUbicacionesBtn = event.target.closest("#btn-volver-ubicaciones");
+    if (volverUbicacionesBtn) {
+      event.preventDefault();
+      setActiveView(ubicacionDetalleReturnView || "Ubicaciones");
+      return;
+    }
+    const volverCategoriasBtn = event.target.closest("#btn-volver-categorias");
+    if (volverCategoriasBtn) {
+      event.preventDefault();
+      setActiveView("Categorías");
+      return;
+    }
     const target = event.target.closest("#btn-nuevo-bien, [data-view-target='Nuevo bien'], button[data-view='Nuevo bien']");
-    if (target) {
+    if (target && !target.matches("#btn-cancelar-crear-ubicacion, #btn-cancelar-ubicacion-footer")) {
       event.preventDefault();
       setActiveView("Nuevo bien");
       return;
@@ -390,6 +1115,30 @@
     if (cancelCatTarget) {
       event.preventDefault();
       setActiveView("Categorías");
+      return;
+    }
+    const quickUbiTarget = event.target.closest("#btn-quick-nueva-ubicacion");
+    if (quickUbiTarget) {
+      event.preventDefault();
+      configureNuevaUbicacionReturnTarget("Nuevo bien");
+      setActiveView("Nueva ubicación");
+      document.querySelector("#location-name")?.focus();
+      return;
+    }
+    const nuevaUbiTarget = event.target.closest("#btn-nueva-ubicacion, [data-view-target='Nueva ubicación'], button[data-view='Nueva ubicación']");
+    if (nuevaUbiTarget) {
+      event.preventDefault();
+      configureNuevaUbicacionReturnTarget("Ubicaciones");
+      setActiveView("Nueva ubicación");
+      document.querySelector("#location-name")?.focus();
+      return;
+    }
+    const cancelUbiTarget = event.target.closest("#btn-cancelar-crear-ubicacion, #btn-cancelar-ubicacion-footer, [data-view-target='Ubicaciones']");
+    if (cancelUbiTarget) {
+      event.preventDefault();
+      const targetView = ubicacionReturnView || "Ubicaciones";
+      configureNuevaUbicacionReturnTarget("Ubicaciones");
+      setActiveView(targetView);
       return;
     }
     const genericTarget = event.target.closest("[data-view-target]");
@@ -539,11 +1288,15 @@
         return;
       }
 
+      const rawLocVal = String(locSelect?.value || "");
       let payload = {
         internal_code: codeVal,
         name: nameVal,
-        location_id: locSelect?.value ? Number(locSelect.value) : null,
+        location_id: rawLocVal && !rawLocVal.startsWith("veh:") ? Number(rawLocVal) : null,
       };
+      if (rawLocVal.startsWith("veh:")) {
+        payload.destination_vehicle_asset_id = Number(rawLocVal.slice(4));
+      }
 
       if (isNewCat) {
         if (!newCatVal || newCatVal.length < 3) {
@@ -704,6 +1457,245 @@
     });
   }
 
+  // --- VISTA Y FORMULARIO: UBICACIONES Y NUEVA UBICACIÓN ---
+  const assetLocationSelect = document.querySelector("#asset-location");
+  if (assetLocationSelect) {
+    lastValidAssetLocationValue = assetLocationSelect.value !== "__NEW__" ? assetLocationSelect.value : "";
+    assetLocationSelect.addEventListener("change", () => {
+      if (assetLocationSelect.value === "__NEW__") {
+        assetLocationSelect.value = lastValidAssetLocationValue;
+        configureNuevaUbicacionReturnTarget("Nuevo bien");
+        setActiveView("Nueva ubicación");
+        document.querySelector("#location-name")?.focus();
+      } else {
+        lastValidAssetLocationValue = assetLocationSelect.value;
+      }
+    });
+  }
+
+  const formCrearUbicacion = document.querySelector("#form-crear-ubicacion");
+  const locationTypeSelect = document.querySelector("#location-type");
+  const groupContainerAsset = document.querySelector("#group-location-container-asset");
+  const locationContainerAssetSelect = document.querySelector("#location-container-asset");
+
+  function syncLocationTypeFields() {
+    const isVehiculo = locationTypeSelect?.value === "VEHICULO";
+    if (groupContainerAsset) {
+      groupContainerAsset.hidden = !isVehiculo;
+      if (isVehiculo) {
+        groupContainerAsset.removeAttribute("hidden");
+        groupContainerAsset.style.display = "flex";
+        groupContainerAsset.style.flexDirection = "column";
+      } else {
+        groupContainerAsset.setAttribute("hidden", "");
+        groupContainerAsset.style.display = "none";
+      }
+    }
+    if (locationContainerAssetSelect) {
+      locationContainerAssetSelect.required = isVehiculo;
+      if (!isVehiculo) {
+        locationContainerAssetSelect.value = "";
+      }
+    }
+  }
+
+  if (locationTypeSelect) {
+    locationTypeSelect.addEventListener("change", syncLocationTypeFields);
+  }
+
+  function resetLocationForm() {
+    formCrearUbicacion?.reset();
+    if (locationTypeSelect) {
+      locationTypeSelect.value = "FISICA";
+    }
+    syncLocationTypeFields();
+  }
+
+  const cancelUbicacionBtn = document.querySelector("#btn-cancelar-crear-ubicacion");
+  const cancelUbicacionFooterBtn = document.querySelector("#btn-cancelar-ubicacion-footer");
+  if (cancelUbicacionBtn) {
+    cancelUbicacionBtn.addEventListener("click", resetLocationForm);
+  }
+  if (cancelUbicacionFooterBtn) {
+    cancelUbicacionFooterBtn.addEventListener("click", resetLocationForm);
+  }
+
+  function selectCreatedLocationInAssetForm(createdLoc) {
+    const locSelect = document.querySelector("#asset-location");
+    if (!locSelect || !createdLoc || createdLoc.id === undefined || createdLoc.id === null) return;
+    const targetVal = String(createdLoc.id);
+    const exists = Array.from(locSelect.options || []).some(opt => String(opt.value) === targetVal);
+    if (!exists) {
+      const opt = document.createElement("option");
+      opt.value = targetVal;
+      opt.textContent = createdLoc.name || `Ubicación #${targetVal}`;
+      const newOpt = locSelect.querySelector("option[value='__NEW__']");
+      if (newOpt && typeof locSelect.insertBefore === "function") {
+        locSelect.insertBefore(opt, newOpt);
+      } else if (typeof locSelect.appendChild === "function") {
+        locSelect.appendChild(opt);
+      }
+    }
+    locSelect.value = targetVal;
+    lastValidAssetLocationValue = targetVal;
+  }
+
+  if (formCrearUbicacion) {
+    formCrearUbicacion.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const nameInput = formCrearUbicacion.querySelector("#location-name");
+      const typeInput = formCrearUbicacion.querySelector("#location-type");
+      const containerInput = formCrearUbicacion.querySelector("#location-container-asset");
+      const descInput = formCrearUbicacion.querySelector("#location-description");
+      const submitBtn = formCrearUbicacion.querySelector("#btn-submit-ubicacion, button[type='submit']");
+
+      const nameVal = nameInput?.value?.trim() || "";
+      const locTypeVal = (typeInput?.value || "FISICA").toUpperCase();
+      const containerVal = containerInput?.value || "";
+      const descVal = descInput?.value?.trim() || "";
+
+      if (!nameVal || nameVal.length < 3) {
+        showToast("Complete el nombre de la ubicación (mínimo 3 caracteres)");
+        nameInput?.focus();
+        return;
+      }
+
+      if (locTypeVal === "VEHICULO" && (!containerVal || Number(containerVal) <= 0)) {
+        showToast("Seleccione el bien contenedor para la ubicación vehicular");
+        containerInput?.focus();
+        return;
+      }
+
+      const payload = {
+        name: nameVal,
+        location_type: locTypeVal === "VEHICULO" ? "VEHICULO" : "FISICA",
+        container_asset_id: locTypeVal === "VEHICULO" ? Number(containerVal) : null,
+        description: descVal || null,
+        active: true,
+      };
+
+      const origText = submitBtn ? submitBtn.innerHTML : "";
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = `<span aria-hidden="true">⏳</span> Guardando…`;
+      }
+
+      const targetReturnView = ubicacionReturnView || "Ubicaciones";
+
+      try {
+        const response = await fetch("/inventory/locations", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Accept": "application/json" },
+          body: JSON.stringify(payload),
+          credentials: "same-origin",
+        });
+
+        if (!response.ok) {
+          let errDetail = "La ubicación ya existe o no se pudo crear";
+          try {
+            const errJson = await response.json();
+            errDetail = extractApiErrorMessage(errJson, errDetail);
+          } catch (_) {}
+          showToast(`Error: ${errDetail}`);
+          return;
+        }
+
+        let createdLoc = null;
+        try {
+          createdLoc = await response.json();
+        } catch (_) {}
+
+        showToast(`Ubicación "${nameVal}" registrada correctamente`);
+        resetLocationForm();
+        await checkApiConnection();
+        if (createdLoc) {
+          selectCreatedLocationInAssetForm(createdLoc);
+        }
+        configureNuevaUbicacionReturnTarget("Ubicaciones");
+        setActiveView(targetReturnView);
+      } catch (_err) {
+        const fallbackLoc = { id: Date.now(), name: nameVal, location_type: payload.location_type };
+        showToast(`Ubicación "${nameVal}" registrada (modo local)`);
+        resetLocationForm();
+        selectCreatedLocationInAssetForm(fallbackLoc);
+        configureNuevaUbicacionReturnTarget("Ubicaciones");
+        setActiveView(targetReturnView);
+      } finally {
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = origText;
+        }
+      }
+    });
+  }
+
+  const ubicacionesSearchInput = document.querySelector("#ubicaciones-search-input");
+  if (ubicacionesSearchInput) {
+    ubicacionesSearchInput.addEventListener("input", (e) => {
+      const q = e.target.value || "";
+      if (window.DashboardRenderer && typeof window.DashboardRenderer.setUbicacionesQuery === "function" && window.DashboardRenderer.getRealData?.()) {
+        window.DashboardRenderer.setUbicacionesQuery(q);
+      } else {
+        const panel = ubicacionesSearchInput.closest(".panel");
+        const cleanQ = q.trim().toLowerCase();
+        panel?.querySelectorAll("tbody tr").forEach(row => {
+          row.hidden = cleanQ ? !row.textContent.toLowerCase().includes(cleanQ) : false;
+        });
+      }
+    });
+  }
+
+  const ubicacionBienesSearchInput = document.querySelector("#ubicacion-bienes-search-input");
+  if (ubicacionBienesSearchInput) {
+    ubicacionBienesSearchInput.addEventListener("input", (e) => {
+      const q = e.target.value || "";
+      if (window.DashboardRenderer && typeof window.DashboardRenderer.setUbicacionBienesQuery === "function") {
+        window.DashboardRenderer.setUbicacionBienesQuery(q);
+      }
+    });
+  }
+
+  const categoriaBienesSearchInput = document.querySelector("#categoria-bienes-search-input");
+  if (categoriaBienesSearchInput) {
+    categoriaBienesSearchInput.addEventListener("input", (e) => {
+      const q = e.target.value || "";
+      if (window.DashboardRenderer && typeof window.DashboardRenderer.setCategoriaBienesQuery === "function") {
+        window.DashboardRenderer.setCategoriaBienesQuery(q);
+      }
+    });
+  }
+
+  const vehiculosSearchInput = document.querySelector("#vehiculos-search-input");
+  if (vehiculosSearchInput) {
+    vehiculosSearchInput.addEventListener("input", (e) => {
+      const q = e.target.value || "";
+      if (window.DashboardRenderer && typeof window.DashboardRenderer.setVehiculosQuery === "function") {
+        window.DashboardRenderer.setVehiculosQuery(q);
+      }
+    });
+  }
+
+  const ubicacionesTabs = document.querySelectorAll("#view-ubicaciones .table-tabs button");
+  ubicacionesTabs.forEach(btn => {
+    btn.addEventListener("click", () => {
+      ubicacionesTabs.forEach(b => {
+        b.classList.remove("is-active");
+        b.setAttribute("aria-selected", "false");
+      });
+      btn.classList.add("is-active");
+      btn.setAttribute("aria-selected", "true");
+      const filter = btn.dataset.filter || "all";
+      if (window.DashboardRenderer && typeof window.DashboardRenderer.setUbicacionesFilter === "function" && window.DashboardRenderer.getRealData?.()) {
+        window.DashboardRenderer.setUbicacionesFilter(filter);
+      } else {
+        const panel = btn.closest(".panel");
+        panel?.querySelectorAll("tbody tr").forEach(row => {
+          row.hidden = filter === "all" ? false : (row.dataset.type !== filter);
+        });
+      }
+    });
+  });
+
   // --- MODAL: MOVER BIEN DE UBICACIÓN ---
   const modalMover = document.querySelector("#modal-mover-bien");
   const formMoverBien = document.querySelector("#form-mover-bien");
@@ -821,12 +1813,21 @@
     if (moverObsInput) moverObsInput.value = "";
     if (moverNuevoDestinoInput) moverNuevoDestinoInput.value = "";
 
-    // Populate destination dropdown, excluding current location
+    // Populate destination dropdown with physical locations and eligible vehicles, excluding current location and self
     if (moverDestinoSelect) {
-      const availableLocations = (realData.locations || []).filter(l => l.id !== asset.location_id);
+      const destItems = buildDestinationOptionItems({
+        locations: realData.locations || [],
+        assets: realData.assets || [],
+        categories: realData.categories || [],
+        excludeLocationId: asset.location_id,
+        excludeAssetId: asset.id,
+      });
       const options = [
         '<option value="" disabled selected>Seleccione el destino…</option>',
-        ...availableLocations.map(l => `<option value="${l.id}">${l.name}</option>`),
+        ...destItems.map(
+          item =>
+            `<option value="${escapeOptionHtml(item.value)}">${escapeOptionHtml(item.text)}</option>`
+        ),
         '<option value="__NEW__" class="opt-new-category">+ Crear nueva ubicación…</option>'
       ];
       moverDestinoSelect.innerHTML = options.join("");
@@ -901,6 +1902,7 @@
         (panelNewDestino && !panelNewDestino.hidden && panelNewDestino.style.display !== "none");
 
       let destinationId = null;
+      let destinationVehicleAssetId = null;
       let destinationName = "";
       const reasonVal = moverMotivoInput?.value?.trim() || "";
       const obsVal = moverObsInput?.value?.trim() || "";
@@ -914,8 +1916,8 @@
       try {
         if (isNew) {
           const newName = moverNuevoDestinoInput?.value?.trim() || "";
-          if (!newName || newName.length < 2) {
-            showToast("Ingresá el nombre de la nueva ubicación (mínimo 2 caracteres)");
+          if (!newName || newName.length < 3) {
+            showToast("Ingresá el nombre de la nueva ubicación (mínimo 3 caracteres)");
             moverNuevoDestinoInput?.focus();
             if (btnConfirmarTraslado) {
               btnConfirmarTraslado.disabled = false;
@@ -957,7 +1959,7 @@
           destinationId = createdLoc.id;
           destinationName = createdLoc.name;
         } else {
-          const destVal = moverDestinoSelect?.value;
+          const destVal = String(moverDestinoSelect?.value || "");
           if (!destVal || destVal === "__NEW__") {
             showToast("Seleccione una ubicación de destino (*)");
             moverDestinoSelect?.focus();
@@ -967,8 +1969,22 @@
             }
             return;
           }
-          destinationId = Number(destVal);
-          destinationName = moverDestinoSelect.options[moverDestinoSelect.selectedIndex]?.textContent || "la ubicación destino";
+          if (destVal.startsWith("veh:")) {
+            destinationVehicleAssetId = Number(destVal.slice(4));
+          } else {
+            destinationId = Number(destVal);
+          }
+          destinationName = moverDestinoSelect.options[moverDestinoSelect.selectedIndex]?.textContent?.replace(/^\s*-\s*/, "") || "la ubicación destino";
+        }
+
+        const transferBody = {
+          reason: reasonVal || null,
+          observations: obsVal || null,
+        };
+        if (destinationVehicleAssetId !== null) {
+          transferBody.destination_vehicle_asset_id = destinationVehicleAssetId;
+        } else {
+          transferBody.destination_location_id = destinationId;
         }
 
         // Step 2: Transfer the asset to the destination
@@ -978,11 +1994,7 @@
             "Content-Type": "application/json",
             "Accept": "application/json",
           },
-          body: JSON.stringify({
-            destination_location_id: destinationId,
-            reason: reasonVal || null,
-            observations: obsVal || null,
-          }),
+          body: JSON.stringify(transferBody),
           credentials: "same-origin",
         });
 

@@ -11,6 +11,7 @@ from app.modules.inventory.register_asset.schemas import (
     RegisterAssetResponse,
 )
 from app.modules.inventory.register_asset.service import (
+    IneligibleVehicleAssetError,
     LocationUnavailableError,
     create_asset,
 )
@@ -33,6 +34,11 @@ async def register_asset(
 ) -> RegisterAssetResponse:
     try:
         asset = await create_asset(session, request)
+    except IneligibleVehicleAssetError as error:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="El destino seleccionado no es válido para registrar el bien.",
+        ) from error
     except LocationUnavailableError as error:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

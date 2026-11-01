@@ -23,17 +23,36 @@ test("HTML Structure: contains all required views and navigation items", () => {
   assert.match(html, /id="view-categorias"[^>]*class="[^"]*view-content/);
   assert.match(html, /id="view-nueva-categoria"[^>]*class="[^"]*view-content/);
   assert.match(html, /id="view-ubicaciones"[^>]*class="[^"]*view-content/);
+  assert.match(html, /id="view-nueva-ubicacion"[^>]*class="[^"]*view-content/);
   assert.match(html, /id="view-invitaciones"[^>]*class="[^"]*view-content/);
 
   // Verify 'Nuevo bien' button and creation form exist
   assert.match(html, /id="btn-nuevo-bien"/);
   assert.match(html, /id="form-crear-bien"/);
   assert.match(html, /Registrar Nuevo Bien/);
+  assert.match(html, /id="btn-quick-nueva-ubicacion"/);
 
-  // Verify 'Nueva categoría' button and creation form exist
+  // Verify 'Nueva categoría' button, detail view, and creation form exist
   assert.match(html, /id="btn-nueva-categoria"/);
   assert.match(html, /id="form-crear-categoria"/);
   assert.match(html, /Registrar Nueva Categoría/);
+  assert.match(html, /id="view-categoria-bienes"[^>]*class="[^"]*view-content/);
+  assert.match(html, /id="categoria-bienes-search-input"/);
+  assert.match(html, /id="categoria-bienes-table-body"/);
+  assert.match(html, /id="btn-volver-categorias"/);
+
+  // Verify 'Nueva ubicación' button, table body, search input, and creation form exist
+  assert.match(html, /id="btn-nueva-ubicacion"/);
+  assert.match(html, /id="ubicaciones-search-input"/);
+  assert.match(html, /id="ubicaciones-table-body"/);
+  assert.match(html, /id="form-crear-ubicacion"/);
+  assert.match(html, /Registrar Nueva Ubicación/);
+
+  // Verify 'Vehículos' dedicated view, search input, table body, and mobile navigation item exist
+  assert.match(html, /id="view-vehiculos"[^>]*class="[^"]*view-content"[^>]*data-view="Vehículos"/);
+  assert.match(html, /id="vehiculos-search-input"/);
+  assert.match(html, /id="vehiculos-table-body"/);
+  assert.match(html, /id="mobile-nav"[\s\S]*?data-view="Vehículos"/);
 
   // Verify dashboard heading actions has ID for dynamic toggling
   assert.match(html, /id="dashboard-heading-actions"/);
@@ -93,6 +112,7 @@ test("View Switching Simulation: toggling views hides dashboard cards and displa
   const viewCategorias = createElement("view-categorias", { view: "Categorías" }, true);
   const viewNuevaCategoria = createElement("view-nueva-categoria", { view: "Nueva categoría" }, true);
   const viewUbicaciones = createElement("view-ubicaciones", { view: "Ubicaciones" }, true);
+  const viewNuevaUbicacion = createElement("view-nueva-ubicacion", { view: "Nueva ubicación" }, true);
   const viewInvitaciones = createElement("view-invitaciones", { view: "Invitaciones" }, true);
   const viewGeneric = createElement("view-generic", { view: "placeholder" }, true);
 
@@ -103,6 +123,7 @@ test("View Switching Simulation: toggling views hides dashboard cards and displa
     viewCategorias,
     viewNuevaCategoria,
     viewUbicaciones,
+    viewNuevaUbicacion,
     viewInvitaciones,
     viewGeneric,
   ];
@@ -114,6 +135,7 @@ test("View Switching Simulation: toggling views hides dashboard cards and displa
     "Categorías": "Clasificación y catálogo de bienes del cuerpo de bomberos.",
     "Nueva categoría": "Alta y registro de nueva categoría en el catálogo operativo.",
     "Ubicaciones": "Destinos operativos, cuarteles, depósitos y móviles asignados.",
+    "Nueva ubicación": "Alta y registro de nueva ubicación física o vehicular en el inventario.",
     "Invitaciones": "Control y emisión de invitaciones de acceso para personal autorizado.",
   };
 
@@ -204,8 +226,21 @@ test("View Switching Simulation: toggling views hides dashboard cards and displa
   assert.equal(viewInventory.hidden, true);
   assert.equal(viewCategorias.hidden, true);
   assert.equal(viewUbicaciones.hidden, false);
+  assert.equal(viewNuevaUbicacion.hidden, true);
   assert.equal(pageTitle.textContent, "Ubicaciones");
   assert.equal(pageSubtitle.textContent, VIEW_SUBTITLES["Ubicaciones"]);
+
+  // 4b. Click '+ Nueva ubicación' -> Navigates to Nueva ubicación form view
+  simulateSetActiveView("Nueva ubicación");
+  assert.equal(viewUbicaciones.hidden, true, "Ubicaciones list view must hide when creating new location");
+  assert.equal(viewNuevaUbicacion.hidden, false, "Nueva ubicación form view must become visible");
+  assert.equal(pageTitle.textContent, "Nueva ubicación");
+  assert.equal(pageSubtitle.textContent, VIEW_SUBTITLES["Nueva ubicación"]);
+
+  // 4c. Return back to Ubicaciones
+  simulateSetActiveView("Ubicaciones");
+  assert.equal(viewUbicaciones.hidden, false);
+  assert.equal(viewNuevaUbicacion.hidden, true);
 
   // 5. Click Invitaciones -> Only Invitaciones appears
   simulateSetActiveView("Invitaciones");

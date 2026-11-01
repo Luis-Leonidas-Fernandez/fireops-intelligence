@@ -1,8 +1,8 @@
 # ADR-004 — Aislamiento transaccional para pruebas de inventario
 
-- **Estado:** propuesto para Task 06; el patrón ya está implementado solo en la suite de autenticación.
-- **Fecha de registro:** 2026-10-03.
-- **Alcance inicial:** tests de lectura de bienes de la Task 06. Extender a los tests existentes requerirá trabajo adicional.
+- **Estado:** aceptado e implementado (registrado originalmente como propuesta el 2026-10-03; implementado en `tests/modules/inventory/conftest.py`).
+- **Fecha de registro:** 2026-10-03 (actualizado el 2026-11-01).
+- **Alcance:** suite de pruebas del módulo de inventario (`tests/modules/inventory/`) y de autenticación (`tests/modules/auth/`).
 
 ## Contexto
 
@@ -26,4 +26,4 @@ La fixture futura de Task 06 debe verificar aislamiento ejecutando tests individ
 
 ## Evidencia
 
-`app/infrastructure/database/session.py`, `tests/modules/inventory/test_asset_endpoints.py`, `tests/modules/inventory/test_category_endpoints.py`, `tests/modules/auth/conftest.py` y `labs/TASK_06_GET_ASSET_BY_ID.md`. Actualmente `tests/modules/inventory/test_get_asset_endpoint.py` está vacío.
+`app/infrastructure/database/session.py`, `tests/modules/inventory/conftest.py`, `tests/modules/inventory/test_asset_endpoints.py`, `tests/modules/inventory/test_category_endpoints.py`, `tests/modules/inventory/test_get_asset_endpoint.py`, `tests/modules/inventory/test_location_endpoints.py`, `tests/modules/auth/conftest.py` y `labs/TASK_06_GET_ASSET_BY_ID.md`.

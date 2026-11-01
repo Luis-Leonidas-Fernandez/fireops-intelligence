@@ -10,6 +10,7 @@ from app.config.settings import get_settings
 from app.modules.auth.models import Role, User
 from app.modules.auth.validations.tokens import ACCESS_TOKEN_COOKIE, create_access_token
 from app.modules.inventory.shared.models import Asset, Category, Location
+from app.modules.inventory.shared.vehicle_container import resolve_or_create_vehicle_location
 
 
 async def create_category(session: AsyncSession) -> int:
@@ -503,3 +504,240 @@ async def test_cycle_rejection_rolls_back_transfer_and_history(
     assert (
         await client.get(f"/inventory/assets/{vehicle['id']}/transfers")
     ).json() == []
+
+
+@pytest.mark.asyncio
+async def test_register_and_transfer_into_vehicle_auto_creates_and_reuses_container_atomically(
+    inventory_session: AsyncSession,
+    authenticated_inventory_client: AsyncClient,
+) -> None:
+    client = authenticated_inventory_client
+    user = await create_test_user(inventory_session)
+    client.cookies.set(
+        ACCESS_TOKEN_COOKIE, create_access_token(user.id, get_settings().secret_key)
+    )
+
+    # Create 'Vehículo' category and 'Herramientas' category
+    veh_cat = Category(nombre="Vehículo")
+    tools_cat = Category(nombre=f"Herramientas-{uuid4().hex[:8]}")
+    inventory_session.add_all([veh_cat, tools_cat])
+    await inventory_session.commit()
+    await inventory_session.refresh(veh_cat)
+    await inventory_session.refresh(tools_cat)
+    veh_cat_id = veh_cat.id
+    tools_cat_id = tools_cat.id
+
+    # 1. Create physical parking location ("Playón delantero")
+    playon_resp = await client.post(
+        "/inventory/locations",
+        json={"name": "Playón delantero", "location_type": "FISICA"},
+    )
+    assert playon_resp.status_code == 201
+    playon = playon_resp.json()
+
+    # 2. Register Camioneta HGJ-875 parked at Playón delantero (without a VEHICULO Location yet)
+    camioneta = await create_asset(
+        client,
+        veh_cat_id,
+        internal_code="HGJ-875",
+        name="Camioneta HGJ-875",
+        location_id=playon["id"],
+    )
+    assert camioneta["location_id"] == playon["id"]
+
+    # Confirm no mobile location exists yet for Camioneta HGJ-875
+    locs_before = (await client.get("/inventory/locations")).json()
+    assert not any(
+        loc["container_asset_id"] == camioneta["id"] for loc in locs_before
+    )
+
+    # 3. Rollback check on failed creation: duplicate internal_code ("HGJ-875") targeting unconfigured vehicle
+    failed_create = await client.post(
+        "/inventory/assets",
+        json={
+            "internal_code": "HGJ-875",
+            "name": "Duplicado inválido",
+            "category_id": tools_cat_id,
+            "destination_vehicle_asset_id": camioneta["id"],
+        },
+    )
+    assert failed_create.status_code == 409
+    locs_after_failed = (await client.get("/inventory/locations")).json()
+    assert not any(
+        loc["container_asset_id"] == camioneta["id"] for loc in locs_after_failed
+    ), "Failed asset creation must roll back auto-created vehicle location"
+
+    # 4. Register an asset targeting Camioneta HGJ-875 (vehicle without container yet)
+    radio_resp = await client.post(
+        "/inventory/assets",
+        json={
+            "internal_code": f"RAD-{uuid4().hex[:8]}",
+            "name": "Handy Motorola VHF",
+            "category_id": tools_cat_id,
+            "destination_vehicle_asset_id": camioneta["id"],
+        },
+    )
+    assert radio_resp.status_code == 201, radio_resp.text
+    radio = radio_resp.json()
+
+    # Verify mobile location was automatically created and linked to Camioneta HGJ-875
+    locs_after = (await client.get("/inventory/locations")).json()
+    veh_locs = [
+        loc for loc in locs_after if loc["container_asset_id"] == camioneta["id"]
+    ]
+    assert len(veh_locs) == 1
+    veh_loc = veh_locs[0]
+    assert veh_loc["location_type"] == "VEHICULO"
+    assert radio["location_id"] == veh_loc["id"]
+
+    # Verify Camioneta HGJ-875 preserved its physical parking location (Playón delantero)
+    camioneta_refreshed = (
+        await client.get(f"/inventory/assets/{camioneta['id']}")
+    ).json()
+    assert camioneta_refreshed["location_id"] == playon["id"]
+
+    # 5. Register a second asset into the same vehicle (reuses existing mobile container without duplicating)
+    linterna_resp = await client.post(
+        "/inventory/assets",
+        json={
+            "internal_code": f"LIN-{uuid4().hex[:8]}",
+            "name": "Linterna Táctica",
+            "category_id": tools_cat_id,
+            "destination_vehicle_asset_id": camioneta["id"],
+        },
+    )
+    assert linterna_resp.status_code == 201, linterna_resp.text
+    assert linterna_resp.json()["location_id"] == veh_loc["id"]
+    locs_after_second = (await client.get("/inventory/locations")).json()
+    assert (
+        len([l for l in locs_after_second if l["container_asset_id"] == camioneta["id"]])
+        == 1
+    )
+
+    # 6. Transfer an existing asset into a second unconfigured vehicle ("Móvil Logístico")
+    movil_2 = await create_asset(
+        client,
+        veh_cat_id,
+        internal_code=f"MOV-{uuid4().hex[:8]}",
+        name="Móvil Logístico",
+        location_id=playon["id"],
+    )
+    botiquin = await create_asset(
+        client,
+        tools_cat_id,
+        internal_code=f"BOT-{uuid4().hex[:8]}",
+        name="Botiquín Trauma",
+        location_id=playon["id"],
+    )
+
+    transfer_resp = await client.post(
+        f"/inventory/assets/{botiquin['id']}/transfers",
+        json={
+            "destination_vehicle_asset_id": movil_2["id"],
+            "reason": "Carga en unidad móvil",
+        },
+    )
+    assert transfer_resp.status_code == 201, transfer_resp.text
+    transfer_data = transfer_resp.json()
+    assert transfer_data["origin_location_id"] == playon["id"]
+
+    locs_final = (await client.get("/inventory/locations")).json()
+    movil_2_locs = [
+        l for l in locs_final if l["container_asset_id"] == movil_2["id"]
+    ]
+    assert len(movil_2_locs) == 1
+    assert transfer_data["destination_location_id"] == movil_2_locs[0]["id"]
+
+    # Verify Móvil Logístico preserved its parking location at Playón delantero
+    assert (
+        await client.get(f"/inventory/assets/{movil_2['id']}")
+    ).json()["location_id"] == playon["id"]
+
+    # 7. Reject using a regular non-vehicle asset (e.g. botiquin) as a vehicle container
+    ineligible_resp = await client.post(
+        "/inventory/assets",
+        json={
+            "internal_code": f"ERR-{uuid4().hex[:8]}",
+            "name": "Item Inválido",
+            "category_id": tools_cat_id,
+            "destination_vehicle_asset_id": botiquin["id"],
+        },
+    )
+    assert ineligible_resp.status_code == 409
+
+    # 8. Reject self-containment cycle via destination_vehicle_asset_id
+    self_cycle_resp = await client.post(
+        f"/inventory/assets/{camioneta['id']}/transfers",
+        json={"destination_vehicle_asset_id": camioneta["id"]},
+    )
+    assert self_cycle_resp.status_code == 409
+
+    # 9. Reject ambiguous payload providing both location_id and destination_vehicle_asset_id
+    ambiguous_resp = await client.post(
+        "/inventory/assets",
+        json={
+            "internal_code": f"AMB-{uuid4().hex[:8]}",
+            "name": "Ambiguo",
+            "category_id": tools_cat_id,
+            "location_id": playon["id"],
+            "destination_vehicle_asset_id": camioneta["id"],
+        },
+    )
+    assert ambiguous_resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_concurrent_vehicle_container_creation_on_conflict_reuses_single_location(
+    inventory_session: AsyncSession,
+    authenticated_inventory_client: AsyncClient,
+) -> None:
+    client = authenticated_inventory_client
+    veh_cat = Category(nombre="Vehículos")
+    tools_cat = Category(nombre=f"Equipos-{uuid4().hex[:8]}")
+    inventory_session.add_all([veh_cat, tools_cat])
+    await inventory_session.commit()
+    await inventory_session.refresh(veh_cat)
+    await inventory_session.refresh(tools_cat)
+
+    vehicle = await create_asset(
+        client,
+        veh_cat.id,
+        internal_code=f"AUT-{uuid4().hex[:8]}",
+        name="Autobomba Pesada A-12",
+    )
+
+    # First resolution creates the mobile location
+    loc_first = await resolve_or_create_vehicle_location(
+        inventory_session, vehicle["id"]
+    )
+    await inventory_session.commit()
+
+    # Simulate a concurrent worker that raced past the initial SELECT before the winner inserted,
+    # hitting the PostgreSQL INSERT ... ON CONFLICT (bien_contenedor_id) DO NOTHING path directly.
+    original_scalar = inventory_session.scalar
+    select_location_calls = 0
+
+    async def racing_scalar(statement, *args, **kwargs):
+        nonlocal select_location_calls
+        sql_text = str(statement)
+        if "FROM ubicaciones" in sql_text and "INSERT INTO" not in sql_text:
+            select_location_calls += 1
+            if select_location_calls == 1:
+                # Simulate race: initial SELECT sees no Location yet
+                return None
+        return await original_scalar(statement, *args, **kwargs)
+
+    inventory_session.scalar = racing_scalar  # type: ignore[method-assign]
+    try:
+        loc_second = await resolve_or_create_vehicle_location(
+            inventory_session, vehicle["id"]
+        )
+    finally:
+        inventory_session.scalar = original_scalar  # type: ignore[method-assign]
+
+    assert select_location_calls == 2, "Must execute fallback SELECT after ON CONFLICT DO NOTHING"
+    assert loc_second.id == loc_first.id
+
+    all_locs = (await client.get("/inventory/locations")).json()
+    matching = [l for l in all_locs if l["container_asset_id"] == vehicle["id"]]
+    assert len(matching) == 1

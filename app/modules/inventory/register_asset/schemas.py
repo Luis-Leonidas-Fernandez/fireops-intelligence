@@ -9,11 +9,19 @@ class RegisterAssetRequest(BaseModel):
     category_id: int | None = Field(default=None, gt=0)
     new_category_name: str | None = Field(default=None, min_length=3, max_length=100)
     location_id: int | None = Field(default=None, gt=0)
+    destination_vehicle_asset_id: int | None = Field(default=None, gt=0)
 
     @model_validator(mode="after")
     def require_one_category_source(self) -> Self:
         if (self.category_id is None) == (self.new_category_name is None):
             raise ValueError("Provide either category_id or new_category_name.")
+        if (
+            self.location_id is not None
+            and self.destination_vehicle_asset_id is not None
+        ):
+            raise ValueError(
+                "Provide either location_id or destination_vehicle_asset_id, not both."
+            )
         return self
 
 

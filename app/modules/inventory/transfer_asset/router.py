@@ -15,6 +15,7 @@ from app.modules.inventory.transfer_asset.schemas import (
 from app.modules.inventory.transfer_asset.service import (
     AssetNotFoundError,
     DestinationUnavailableError,
+    IneligibleVehicleAssetError,
     SameLocationError,
     TransferConstraintViolationError,
 )
@@ -79,6 +80,11 @@ async def transfer_asset(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Asset not found.",
+        ) from error
+    except IneligibleVehicleAssetError as error:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="El destino seleccionado no es válido para trasladar el bien.",
         ) from error
     except DestinationUnavailableError as error:
         raise HTTPException(

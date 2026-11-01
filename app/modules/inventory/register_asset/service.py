@@ -4,6 +4,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.inventory.register_asset.schemas import RegisterAssetRequest
 from app.modules.inventory.shared.models import Asset, Category, Location
+from app.modules.inventory.shared.vehicle_container import (
+    IneligibleVehicleAssetError,
+    VehicleAssetNotFoundError,
+    VehicleLocationInactiveError,
+    resolve_or_create_vehicle_location,
+)
 
 
 class LocationUnavailableError(Exception):
@@ -38,17 +44,27 @@ async def _resolve_category_id(
 
 async def create_asset(session: AsyncSession, request: RegisterAssetRequest) -> Asset:
     try:
-        if request.location_id is not None:
+        resolved_location_id: int | None = None
+        if request.destination_vehicle_asset_id is not None:
+            try:
+                vehicle_location = await resolve_or_create_vehicle_location(
+                    session, request.destination_vehicle_asset_id
+                )
+            except (VehicleAssetNotFoundError, VehicleLocationInactiveError) as error:
+                raise LocationUnavailableError from error
+            resolved_location_id = vehicle_location.id
+        elif request.location_id is not None:
             location = await session.get(Location, request.location_id)
             if location is None or not location.activa:
                 raise LocationUnavailableError
+            resolved_location_id = location.id
 
         category_id = await _resolve_category_id(session, request)
         asset = Asset(
             codigo_interno=request.internal_code,
             nombre=request.name,
             categoria_id=category_id,
-            ubicacion_id=request.location_id,
+            ubicacion_id=resolved_location_id,
         )
         session.add(asset)
         await session.commit()

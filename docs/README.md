@@ -1,29 +1,30 @@
 # Mapa de documentación
 
-Esta carpeta separa **cómo iniciar el proyecto**, **cómo está construido hoy**, **por qué se eligieron ciertas decisiones** y **qué se estudió en la fase inicial**. Empezar por [progreso](PROGRESS.md) para distinguir trabajo terminado de tareas pendientes.
+Esta carpeta separa **cómo iniciar el proyecto**, **cómo está construido hoy**, **por qué se eligieron ciertas decisiones**, **procedimientos operativos** y **qué se estudió en la fase inicial**. Empezar por [progreso](PROGRESS.md) para distinguir trabajo terminado de tareas pendientes.
 
 | Necesidad | Leer |
 |---|---|
 | Preparar el entorno | [macOS](getting-started/macos.md) o [Windows](getting-started/windows.md) |
 | Configurar acceso con Google | [Guía Google OAuth](getting-started/google-oauth.md) |
-| Entender el backend actual | [Arquitectura del backend](architecture/backend/backend-architecture.md) |
-| Entender la web actual | [Arquitectura del frontend](architecture/frontend/frontend-architecture.md) |
-| Comprender registro, login y sus límites | [ADR-005: autenticación](architecture/adr/ADR-005-email-password-authentication.md) |
-| Configurar el nombre de perfil y el app bar | [Arquitectura del frontend](architecture/frontend/frontend-architecture.md) y [backend](architecture/backend/backend-architecture.md) |
-| Revisar decisiones y propuestas | [Índice de ADR](architecture/adr/README.md) |
-| Conocer el alcance y los pendientes | [Progreso](PROGRESS.md) y [Task 06](../labs/TASK_06_GET_ASSET_BY_ID.md) |
+| Entender el backend actual (inventario, vehículos, contratos API y diagramas) | [Arquitectura del backend](architecture/backend/backend-architecture.md) |
+| Entender la web actual (Ubicaciones, Categorías, Vehículos, Nuevo bien y Mover bien) | [Arquitectura del frontend](architecture/frontend/frontend-architecture.md) |
+| Comprender registro, login, invitaciones y sus límites | [ADR-005: autenticación](architecture/adr/ADR-005-email-password-authentication.md) y [Aprobación de registro](getting-started/registration-approval.md) |
+| Comprender contenedores móviles automáticos para vehículos | [ADR-007: contenedores vehiculares automáticos](architecture/adr/ADR-007-automatic-vehicle-containers.md) |
+| Revisar decisiones arquitectónicas | [Índice de ADR](architecture/adr/README.md) |
+| Operación, preflight de migraciones y recuperación | [Runbook de preflight](migration_preflight_runbook.md) y [Runbook de producción](production_operations_runbook.md) |
+| Conocer el alcance, validaciones y pendientes | [Progreso](PROGRESS.md) |
 
 ## Cómo está organizada la carpeta
 
-- `getting-started/`: guías de instalación y material de configuración/clases para Windows en Markdown y Word.
-- `architecture/`: descripción del sistema actual, ADR y futuros diagramas. Un ADR explica **por qué** se tomó o propuso una decisión; un documento de arquitectura explica **cómo** funciona el código vigente.
-- `architecture/history/architecture-history/`: dos informes históricos con propuestas de diseño en Markdown. No son una especificación implementada; el modelo JSONB que describen aún no existe en las migraciones.
-- `Phase_01/`: requisitos, análisis del desajuste objeto-relacional y modelos conceptual, lógico y físico de la fase inicial. Se conserva como material de análisis, no como descripción del esquema desplegado.
-- `PROGRESS.md`: bitácora y estado actual del equipo.
+- `getting-started/`: guías de instalación, Google OAuth, invitaciones por Gmail, aprobación de registro y material de configuración/clases.
+- `architecture/`: descripción del sistema actual ([backend](architecture/backend/backend-architecture.md) y [frontend](architecture/frontend/frontend-architecture.md)) e [índice de ADR](architecture/adr/README.md). Un ADR explica **por qué** se tomó una decisión; un documento de arquitectura explica **cómo** funciona el código vigente.
+- `architecture/history/architecture-history/`: dos informes históricos con propuestas de diseño inicial en Markdown. Se conservan como antecedentes de diseño; el modelo JSONB completo que describen aún no existe en las migraciones.
+- `Phase_01/`: requisitos, análisis del desajuste objeto-relacional y modelos conceptual, lógico y físico de la fase inicial. Se conserva como material de análisis inicial.
+- `PROGRESS.md`: bitácora cronológica y estado actual del proyecto.
 
-El [README principal](../README.md) ofrece el resumen del repositorio. Las guías de clase terminadas están en `labs/completed/`; la Task 06 sigue en `labs/` porque está pendiente.
+El [README principal](../README.md) ofrece el resumen general del repositorio.
 
-**Estado de acceso:** registro/login por correo y contraseña y Google OAuth funcionan con la configuración correspondiente; `/` exige una cookie de sesión válida. `GET /auth/me` proporciona el nombre o correo autenticado al app bar. La autorización de los endpoints de inventario no está implementada. Las cifras del dashboard continúan siendo ilustrativas. Consulte [progreso](PROGRESS.md) para distinguir el estado del código de la aplicación de las propuestas históricas.
+**Estado actual del sistema:** el inicio de sesión por correo/contraseña, Google OAuth y el flujo de solicitudes/invitaciones están operativos; `/` y las doce rutas de `/inventory/...` exigen una sesión válida con rol activo `ADMINISTRADOR` o `SUPERVISOR`. El frontend consulta datos reales de PostgreSQL para las vistas de `Bienes`, `Categorías`, `Ubicaciones`, `Vehículos` y `Movimientos`, incluyendo la habilitación automática y transaccional de vehículos como contenedores móviles al registrar o trasladar bienes. Consulte [progreso](PROGRESS.md) para el detalle completo y las limitaciones conocidas.
 
 ## Documentos Word convertidos
 

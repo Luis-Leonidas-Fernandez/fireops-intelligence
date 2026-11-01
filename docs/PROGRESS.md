@@ -8,6 +8,31 @@ Al finalizar una jornada, decime `cerramos la jornada`. Se agregará una nueva f
 
 ## Estado actual
 
+> Actualización del 1 de noviembre de 2026: el módulo de inventario cuenta con vistas y flujos completos de Bienes, Categorías, Ubicaciones, Vehículos y Movimientos conectados a PostgreSQL, incluyendo la habilitación automática y transparente de vehículos patrimoniales como contenedores móviles al registrar o trasladar bienes.
+
+### Estado actual del módulo de inventario
+
+- **Autorización y permisos:** todas las rutas de `/inventory/...` requieren sesión activa y rol activo `ADMINISTRADOR` o `SUPERVISOR` (`require_authenticated_user`).
+- **Registro y traslado hacia ubicaciones físicas o vehículos (`POST /inventory/assets` y `POST /inventory/assets/{asset_id}/transfers`):**
+  - Ambos endpoints aceptan tanto una ubicación existente (`location_id` / `destination_location_id`) como un vehículo patrimonial (`destination_vehicle_asset_id`), con validación de exclusión mutua (`422` si se envían ambos).
+  - Cuando se selecciona un vehículo patrimonial como destino, `resolve_or_create_vehicle_location` (`app/modules/inventory/shared/vehicle_container.py`) bloquea el bien vehículo con `SELECT ... FOR UPDATE`, reutiliza su ubicación móvil `VEHICULO` si ya existe o la crea automáticamente (`INSERT ... ON CONFLICT DO NOTHING`) y registra o traslada el bien dentro de la **misma transacción SQLAlchemy**, preservando intacta la ubicación física donde está estacionado el vehículo (`vehicle_asset.ubicacion_id`).
+  - Se mantienen todas las garantías de integridad referencial, unicidad de contenedor por vehículo (`uq_ubicaciones_bien_contenedor_id`) y prevención de ciclos de contención con bloqueo consultivo transaccional (`prevent_location_containment_cycles`, revisión `b3f81e7d2c94`).
+- **Vistas y recorridos validados en el frontend (`frontend/index.html`, `frontend/js/app.js`, `frontend/js/render.js`, `frontend/js/navigation.js`):**
+  - **Ubicaciones:** vista dedicada «Nueva ubicación» (`#view-nueva-ubicacion`), acceso rápido «+ Nueva ubicación» desde «Nuevo bien» (preservando los datos ingresados y seleccionando automáticamente la ubicación creada), listado dinámico real con búsqueda/filtros y recorrido `Ubicaciones → Ver bienes → Detalle del bien` con retorno contextual.
+  - **Categorías:** listado dinámico y recorrido `Categorías → Ver bienes → Detalle del bien` (`#view-categoria-bienes`) con búsqueda en tiempo real y retorno contextual.
+  - **Vehículos (`#view-vehiculos`):** listado unificado y deduplicado del parque automotor (tanto ubicaciones `VEHICULO` como bienes patrimoniales de categoría `Vehículo`/`Vehículos`), mostrando ubicación física de estacionamiento, dotación a bordo (`0 bienes a bordo` o `N bienes a bordo`), estado `En servicio` y accesos a **«Ficha del móvil»** y **«Ver dotación»** con retorno contextual a «Vehículos».
+  - **Selectores jerárquicos transparentes:** en «Nuevo bien» (`#asset-location`) y «Mover bien» (`#modal-mover-bien` / `#mover-destino-select`), los vehículos aparecen anidados debajo de la ubicación física donde están estacionados (`Playón delantero` → `  - Camioneta HGJ-875 (HGJ-875) — Playón delantero`), sin botones ni avisos técnicos sobre la creación interna de contenedores.
+- **Pruebas automatizadas reportadas y validación manual:**
+  - **Backend (inventario):** **158 pruebas aprobadas** y **1 prueba omitida** en el entorno aislado `fireassets_test` (`ENV_FILE=.env.test PYTHONPATH=. .venv/bin/pytest tests/modules/inventory/ -q`).
+  - **Frontend:** **85 pruebas aprobadas** (`node --test frontend/tests/*.test.cjs`).
+  - **Validación manual:** flujos de Ubicaciones, Categorías, Vehículos, alta de bienes y traslado de bienes hacia vehículos validados manualmente de extremo a extremo.
+- **Limitaciones conocidas pendientes:**
+  - La identificación inicial de vehículos que todavía no poseen fila en `ubicaciones` depende actualmente de la coincidencia exacta normalizada con los nombres de categoría «Vehículo» o «Vehículos» (`is_exact_vehicle_category_name`).
+  - El indicador visual «En servicio» representa actividad/asignación de ubicación y no constituye aún un módulo de disponibilidad mecánica o mantenimiento.
+  - La edición y baja de ubicaciones desde la API y ciertas series comparativas históricas de la portada inicial del dashboard permanecen para fases posteriores.
+
+### Estado de autenticación, invitaciones y base de datos (referencia acumulada)
+
 > Actualización local del 19 de octubre: el registro es solicitado por la persona y revisado por un administrador autenticado; la descripción de invitaciones emitidas por administradores que sigue abajo es histórica. No se verificó el envío real de Gmail.
 
 - `POST /auth/registration-requests` acepta solicitudes por correo con respuesta genérica, sin crear cuenta. Google verifica state/nonce/PKCE antes de registrar la solicitud.
@@ -35,6 +60,24 @@ Al finalizar una jornada, decime `cerramos la jornada`. Se agregará una nueva f
 - La guía de SQLTools sigue en `vscode-tools.md`. `docs/README.md` organiza las guías, la arquitectura actual y los ADR. Los tests de autenticación y de Task 06 disponen de fixtures transaccionales propias; los tests anteriores de inventario no comparten todavía esa infraestructura.
 
 ## Registro de jornadas
+
+### 2026-11-01 — inventario operativo: ubicaciones, categorías, vehículos y contenedores móviles automáticos
+
+#### Completado
+
+- **Creación y consulta dinámica de ubicaciones:** se conectó la vista dedicada «Nueva ubicación» (`#view-nueva-ubicacion`) con `POST /inventory/locations`, se implementó el acceso rápido «+ Nueva ubicación» desde «Nuevo bien» (conservando los valores del formulario y seleccionando la ubicación recién creada), se corrigió la validación mínima de 3 caracteres en «Mover bien» y se implementó el recorrido completo `Ubicaciones → Ver bienes → Detalle del bien` (`#view-ubicacion-bienes` y `#view-detalle-bien`) con retorno contextual.
+- **Consulta de bienes por categoría:** se implementó el recorrido `Categorías → Ver bienes → Detalle del bien` (`#view-categoria-bienes`) filtrando por `asset.category_id`, reutilizando `renderScopedAssetsTable` y preservando el retorno contextual hacia la categoría de origen.
+- **Módulo Vehículos (`#view-vehiculos`):** se incorporó la vista operativa de Vehículos en `frontend/index.html` y en la navegación móvil (`#mobile-nav`), unificando sin duplicados las ubicaciones `location_type === "VEHICULO"` y los bienes patrimoniales pertenecientes a la categoría «Vehículo» / «Vehículos», con acciones «Ver dotación» y «Ficha del móvil».
+- **Automatización transparente de vehículos como contenedores móviles ([ADR-007](architecture/adr/ADR-007-automatic-vehicle-containers.md)):**
+  - Se implementó `app/modules/inventory/shared/vehicle_container.py` (`resolve_or_create_vehicle_location` e `is_exact_vehicle_category_name`) y se integró en `POST /inventory/assets` y `POST /inventory/assets/{asset_id}/transfers` mediante el campo `destination_vehicle_asset_id`.
+  - Cuando el usuario selecciona un vehículo como destino y confirma Guardar o Mover, el backend reutiliza su ubicación móvil si existe o la crea automáticamente (`SELECT ... FOR UPDATE` + `INSERT ... ON CONFLICT DO NOTHING`) y registra o traslada el bien en una única transacción SQLAlchemy con rollback completo ante errores, sin alterar la ubicación física de estacionamiento del vehículo.
+  - En el frontend, los selectores `#asset-location` y `#mover-destino-select` muestran los vehículos anidados bajo su ubicación física de estacionamiento y operan de forma totalmente transparente para el usuario, sin avisos técnicos ni botones manuales de habilitación de contenedores.
+- **Pruebas reportadas y validación:** **158 pruebas aprobadas** (1 omitida) en la suite de inventario del backend (`tests/modules/inventory/`) y **85 pruebas aprobadas** en la suite del frontend (`frontend/tests/*.test.cjs`), además de validación manual satisfactoria.
+
+#### Pendiente y limitaciones registradas
+
+- La identificación de vehículos que aún no tienen ubicación móvil depende del nombre normalizado de categoría (`"vehiculo"` / `"vehiculos"`).
+- No existe todavía un estado mecánico/mantenimiento independiente del estado de ubicación activa («En servicio»), ni endpoints de edición/baja de ubicaciones.
 
 ### 2026-10-18 — invitaciones (trabajo local)
 

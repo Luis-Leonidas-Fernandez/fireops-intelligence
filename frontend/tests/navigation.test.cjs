@@ -71,6 +71,12 @@ test("Navigation: verifies role capability matrix", () => {
   assert.equal(nav.canAccessModule("Bienes", "BOMBERO"), false);
   assert.equal(nav.canAccessModule("Categorías", "BOMBERO"), false);
   assert.equal(nav.canAccessModule("Nueva categoría", "BOMBERO"), false);
+  assert.equal(nav.canAccessModule("Detalle de categoría", "BOMBERO"), false);
+  assert.equal(nav.canAccessModule("Ubicaciones", "BOMBERO"), false);
+  assert.equal(nav.canAccessModule("Nueva ubicación", "BOMBERO"), false);
+  assert.equal(nav.canAccessModule("Detalle de ubicación", "BOMBERO"), false);
+  assert.equal(nav.canAccessModule("Detalle de bien", "BOMBERO"), false);
+  assert.equal(nav.canAccessModule("Vehículos", "BOMBERO"), false);
   assert.equal(nav.canAccessModule("Invitaciones", "BOMBERO"), false);
   assert.equal(nav.canAccessModule("Solicitudes", "BOMBERO"), false);
   assert.equal(nav.canAccessModule("Reemisiones", "BOMBERO"), false);
@@ -81,7 +87,12 @@ test("Navigation: verifies role capability matrix", () => {
   assert.equal(nav.canAccessModule("Bienes", "SUPERVISOR"), true);
   assert.equal(nav.canAccessModule("Categorías", "SUPERVISOR"), true);
   assert.equal(nav.canAccessModule("Nueva categoría", "SUPERVISOR"), true);
+  assert.equal(nav.canAccessModule("Detalle de categoría", "SUPERVISOR"), true);
   assert.equal(nav.canAccessModule("Ubicaciones", "SUPERVISOR"), true);
+  assert.equal(nav.canAccessModule("Nueva ubicación", "SUPERVISOR"), true);
+  assert.equal(nav.canAccessModule("Detalle de ubicación", "SUPERVISOR"), true);
+  assert.equal(nav.canAccessModule("Detalle de bien", "SUPERVISOR"), true);
+  assert.equal(nav.canAccessModule("Vehículos", "SUPERVISOR"), true);
   assert.equal(nav.canAccessModule("Invitaciones", "SUPERVISOR"), false);
   assert.equal(nav.canAccessModule("Gestión de accesos", "SUPERVISOR"), false);
   assert.equal(nav.canAccessModule("Solicitudes", "SUPERVISOR"), false);
@@ -92,6 +103,12 @@ test("Navigation: verifies role capability matrix", () => {
   assert.equal(nav.canAccessModule("Inventario general", "ADMINISTRADOR"), true);
   assert.equal(nav.canAccessModule("Bienes", "ADMINISTRADOR"), true);
   assert.equal(nav.canAccessModule("Nueva categoría", "ADMINISTRADOR"), true);
+  assert.equal(nav.canAccessModule("Detalle de categoría", "ADMINISTRADOR"), true);
+  assert.equal(nav.canAccessModule("Ubicaciones", "ADMINISTRADOR"), true);
+  assert.equal(nav.canAccessModule("Nueva ubicación", "ADMINISTRADOR"), true);
+  assert.equal(nav.canAccessModule("Detalle de ubicación", "ADMINISTRADOR"), true);
+  assert.equal(nav.canAccessModule("Detalle de bien", "ADMINISTRADOR"), true);
+  assert.equal(nav.canAccessModule("Vehículos", "ADMINISTRADOR"), true);
   assert.equal(nav.canAccessModule("Invitaciones", "ADMINISTRADOR"), true);
   assert.equal(nav.canAccessModule("Gestión de accesos", "ADMINISTRADOR"), true);
   assert.equal(nav.canAccessModule("Solicitudes", "ADMINISTRADOR"), true);
